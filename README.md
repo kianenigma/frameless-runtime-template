@@ -1,3 +1,3 @@
 # Framelss Activity V3
 
-Run `cargo doc -p runtime --open`, and start hacking 🚀
+Run `cargo doc -p runtime --open`, or see the hosted version [here](https://polkadot-blockchain-academy.github.io/PBA3-frameless-node-template/runtime/), and start hacking 🚀
