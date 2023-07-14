@@ -1,2 +1,3 @@
-# PBA3-frameless-node-template
-template repository for framelessa activity, updated for PBA3
+# Framelss Activity V3
+
+Run `cargo doc -p runtime --open`, and start hacking 🚀
