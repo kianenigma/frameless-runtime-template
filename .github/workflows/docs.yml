@@ -19,7 +19,7 @@ jobs:
           components: rust-docs
 
       - name: Generate docs
-        run: cargo doc --no-deps
+        run: cargo doc --no-deps -p runtime
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
