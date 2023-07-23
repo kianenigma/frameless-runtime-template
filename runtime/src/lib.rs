@@ -286,7 +286,6 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 const LOG_TARGET: &'static str = "frameless";
 
 pub mod shared;
-mod solution;
 
 use log::info;
 use parity_scale_codec::{Decode, Encode};
