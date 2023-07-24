@@ -38,10 +38,6 @@ impl SubstrateCli for Cli {
 				Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path)).map_err(|e| format!("encountered an error while trying to load a spec from file. If you don't have a spec file, run with --dev: {:?}", e))?),
 		})
 	}
-
-	fn native_runtime_version(_: &Box<dyn ChainSpec>) -> &'static RuntimeVersion {
-		&runtime::VERSION
-	}
 }
 
 /// Parse and run command line arguments
