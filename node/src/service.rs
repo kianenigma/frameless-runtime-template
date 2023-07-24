@@ -2,6 +2,7 @@ use runtime::{self, opaque::Block, RuntimeApi};
 pub use sc_executor::NativeElseWasmExecutor;
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use std::sync::Arc;
 
 use crate::cli::Consensus;
@@ -125,13 +126,29 @@ pub fn new_full(config: Configuration, consensus: Consensus) -> Result<TaskManag
 			warp_sync_params: None,
 		})?;
 
+	use futures::FutureExt;
+
 	if config.offchain_worker.enabled {
-		sc_service::build_offchain_workers(
-			&config,
-			task_manager.spawn_handle(),
-			client.clone(),
-			network.clone(),
+		task_manager.spawn_handle().spawn(
+			"offchain-workers-runner",
+			"offchain-worker",
+			sc_offchain::OffchainWorkers::new(sc_offchain::OffchainWorkerOptions {
+				runtime_api_provider: client.clone(),
+				is_validator: config.role.is_authority(),
+				keystore: Some(keystore_container.keystore()),
+				// offchain_db: backend.offchain_storage(),
+				offchain_db: None::<sc_offchain::NoOffchainStorage>,
+				transaction_pool: Some(OffchainTransactionPoolFactory::new(
+					transaction_pool.clone(),
+				)),
+				network_provider: network.clone(),
+				enable_http_requests: true,
+				custom_extensions: |_| vec![],
+			})
+			.run(client.clone(), task_manager.spawn_handle())
+			.boxed(),
 		);
+
 	}
 
 	let rpc_extensions_builder = { Box::new(move |_, _| Ok(jsonrpsee::RpcModule::new(()))) };
