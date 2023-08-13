@@ -1,5 +1,7 @@
 //! Shared types used in your solution, and our grading tool.
 
+#![allow(unused)]
+
 use parity_scale_codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{generic, traits::BlakeTwo256};
@@ -24,7 +26,8 @@ pub const SUDO: [u8; 32] =
 pub const TREASURY: [u8; 32] =
 	hex_literal::hex!["ff3593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"];
 /// Minimum account balanced. No account balance should fall below this, unless if the account is
-/// being destroyed.
+/// being destroyed. In other words, the `free` balance of each account must at all times be greater
+/// than or equal to this, or equal to zero.
 pub const MINIMUM_BALANCE: Balance = 10;
 /// The key to which [`SystemCall::Set`] will write the value.
 ///
@@ -100,7 +103,7 @@ pub enum CurrencyCall {
 	/// ### Errors
 	///
 	/// * If any type of arithmetic operation overflows.
-	/// * If the sender has any reserve balance left.
+	/// * If the sender has any free balance left.
 	///
 	/// Since the sender is a valid account, with more than [`MINIMUM_BALANCE`], the recipient
 	/// is also guaranteed to have at least [`MINIMUM_BALANCE`].

@@ -129,8 +129,8 @@
 //! #### Nonce
 //!
 //! You should implement a nonce system, as explained as a part of the tx-pool lecture. In short,
-//! the validation of each transaction should `require` nonce `(sender, n-1)` and provide `(sender,
-//! n)`. See `TaggedTransactionQueue` below for more information.
+//! the validation of each transaction should `require` nonce `(sender, n-1).encode()` and provide
+//! `(sender, n).encode()`. See `TaggedTransactionQueue` below for more information.
 //!
 //! Note that your nonce should be checked as a part of transaction pool api, which means it should
 //! be implemented as efficiently as possibly, next to other checks that need to happen.
@@ -262,8 +262,7 @@
 //! When importing a block, the api call flow is:
 //!
 //! ```ignore
-//! Core::initialize_block(final_header);
-//! Core::import_block(block);
+//! Core::execute_block(block);
 //! ```
 //!
 //! End of the day, you must ensure that the above two code paths come to the same state root, and
@@ -310,6 +309,7 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 const LOG_TARGET: &'static str = "frameless";
 
 pub mod shared;
+mod solution;
 
 use log::info;
 use parity_scale_codec::{Decode, Encode};
@@ -320,7 +320,7 @@ use sp_runtime::{
 	create_runtime_str,
 	generic::{self},
 	traits::{BlakeTwo256, Block as BlockT},
-	transaction_validity::{TransactionSource, TransactionValidity, ValidTransaction},
+	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult,
 };
 use sp_std::prelude::*;
@@ -391,6 +391,7 @@ impl BuildStorage for RuntimeGenesisConfig {
 pub struct Runtime;
 
 impl Runtime {
+	#[allow(unused)]
 	fn print_state() {
 		let mut key = vec![];
 		while let Some(next) = sp_io::storage::next_key(&key) {
@@ -431,8 +432,8 @@ impl Runtime {
 		// and make sure to _remove_ it.
 		sp_io::storage::clear(&HEADER_KEY);
 
-		// TODO: set correct state root and extrinsics root, as described in the corresponding test
-		// case.
+		Runtime::print_state();
+		let header = Self::solution_finalize_block(header);
 		header
 	}
 
@@ -441,7 +442,8 @@ impl Runtime {
 	/// Study this carefully, but you probably don't need to change it, other than providing a
 	/// proper `do_apply_extrinsic`.
 	fn do_execute_block(block: Block) {
-		info!(target: LOG_TARGET, "Entering execute_block. block: {:?}", block);
+		// info!(target: LOG_TARGET, "Entering execute_block block: {:?} (exts: {})", block,
+		// block.extrinsics.len());
 		sp_io::storage::clear(&EXTRINSICS_KEY);
 
 		for extrinsic in block.clone().extrinsics {
@@ -451,6 +453,8 @@ impl Runtime {
 
 		// check state root. Clean the state prior to asking for the root.
 		sp_io::storage::clear(&HEADER_KEY);
+
+		Self::print_state();
 
 		// NOTE: if we forget to do this, how can you mess with the blockchain?
 		let raw_state_root = &sp_io::storage::root(VERSION.state_version())[..];
@@ -464,7 +468,6 @@ impl Runtime {
 		assert_eq!(block.header.extrinsics_root, extrinsics_root);
 
 		info!(target: LOG_TARGET, "Finishing block import.");
-		Self::print_state();
 	}
 
 	/// Apply a single extrinsic.
@@ -474,12 +477,7 @@ impl Runtime {
 	/// then `Err(InvalidTransaction::BadProof)` must be returned.
 	fn do_apply_extrinsic(ext: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 		info!(target: LOG_TARGET, "Entering apply_extrinsic: {:?}", ext);
-
-		// TODO: we don't have a means of dispatch, implement it! You probably want to match on
-		// `ext.call.function`, and start implementing different arms one at a time. Also, this is
-		// called from both authoring and importing. It should "note" any extrinsic that
-		// successfully executes in EXTRINSICS_KEY.
-		Ok(Ok(()))
+		Self::solution_apply_extrinsic(ext.clone())
 	}
 
 	fn do_validate_transaction(
@@ -489,9 +487,7 @@ impl Runtime {
 	) -> TransactionValidity {
 		log::debug!(target: LOG_TARGET,"Entering validate_transaction. tx: {:?}", ext);
 
-		// TODO: we don't have a means of validating, implement it!
-		// NOTE: every transaction must provide _something_, we provide a dummy value here.
-		Ok(ValidTransaction { provides: vec![ext.encode()], ..Default::default() })
+		Self::solution_validate_transaction(_source, ext, _block_hash)
 	}
 }
 
@@ -619,6 +615,19 @@ mod tests {
 			.unwrap_or_default()
 	}
 
+	#[test]
+	fn does_it_print() {
+		// runt this with `cargo test does_it_print -- --nocapture`
+		println!("Something");
+	}
+
+	#[test]
+	fn does_it_log() {
+		// run this with RUST_LOG=frameless=trace cargo test -p runtime does_it_log
+		sp_tracing::try_init_simple();
+		log::info!(target: LOG_TARGET, "Something");
+	}
+
 	#[docify::export]
 	#[test]
 	fn host_function_call_works() {
@@ -734,6 +743,7 @@ mod tests {
 		let ext1 = signed_set_value(42, 0);
 		let ext2 = signed_set_value(43, 1);
 		let ext3 = signed_set_value(44, 2);
+		let ext4 = unsigned_set_value(2);
 
 		let header = shared::Header {
 			digest: Default::default(),
@@ -751,6 +761,7 @@ mod tests {
 			Runtime::do_apply_extrinsic(ext1.clone()).unwrap().unwrap();
 			Runtime::do_apply_extrinsic(ext2.clone()).unwrap().unwrap();
 			Runtime::do_apply_extrinsic(ext3.clone()).unwrap().unwrap();
+			let _ = Runtime::do_apply_extrinsic(ext4.clone()).unwrap_err();
 
 			let header = Runtime::do_finalize_block();
 
@@ -785,6 +796,23 @@ mod tests {
 			// This should internally check state/extrinsics root. If it does not panic, then we are
 			// gucci.
 			Runtime::do_execute_block(block.clone());
+
+			assert_eq!(Runtime::get_state::<u32>(VALUE_KEY), Some(44));
+
+			// double check the extrinsic and state root:
+			assert_eq!(
+				block.header.state_root,
+				H256::decode(&mut &sp_io::storage::root(Default::default())[..][..]).unwrap(),
+				"incorrect state root in authored block after importing"
+			);
+			assert_eq!(
+				block.header.extrinsics_root,
+				BlakeTwo256::ordered_trie_root(
+					block.extrinsics.into_iter().map(|e| e.encode()).collect::<Vec<_>>(),
+					sp_runtime::StateVersion::V0
+				),
+				"incorrect extrinsics root in authored block",
+			);
 		});
 	}
 }

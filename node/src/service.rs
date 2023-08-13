@@ -1,4 +1,6 @@
+use futures::FutureExt;
 use runtime::{self, opaque::Block, RuntimeApi};
+use sc_client_api::backend::Backend;
 pub use sc_executor::NativeElseWasmExecutor;
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
@@ -126,8 +128,6 @@ pub fn new_full(config: Configuration, consensus: Consensus) -> Result<TaskManag
 			warp_sync_params: None,
 		})?;
 
-	use futures::FutureExt;
-
 	if config.offchain_worker.enabled {
 		task_manager.spawn_handle().spawn(
 			"offchain-workers-runner",
@@ -136,8 +136,7 @@ pub fn new_full(config: Configuration, consensus: Consensus) -> Result<TaskManag
 				runtime_api_provider: client.clone(),
 				is_validator: config.role.is_authority(),
 				keystore: Some(keystore_container.keystore()),
-				// offchain_db: backend.offchain_storage(),
-				offchain_db: None::<sc_offchain::NoOffchainStorage>,
+				offchain_db: backend.offchain_storage(),
 				transaction_pool: Some(OffchainTransactionPoolFactory::new(
 					transaction_pool.clone(),
 				)),
@@ -148,7 +147,6 @@ pub fn new_full(config: Configuration, consensus: Consensus) -> Result<TaskManag
 			.run(client.clone(), task_manager.spawn_handle())
 			.boxed(),
 		);
-
 	}
 
 	let rpc_extensions_builder = { Box::new(move |_, _| Ok(jsonrpsee::RpcModule::new(()))) };
