@@ -27,11 +27,12 @@
 //! missing some key components. Most notably, the logic to:
 //!
 //! 1. apply extrinsics
-//! 2. validate extrinsics for the tx-pool
-//! 3. finalize a block upon authoring
+//! 2. finalize a block upon authoring
+//! 3. validate extrinsics for the tx-pool
+
 //!
 //! are not complete. Your first task is to complete them, and make sure all local tests are
-//! passing. provide a simple `apply_extrinsic`, and finish `finalize_block`. For this first
+//! passing, provide a simple `apply_extrinsic`, and finish `finalize_block`. For this first
 //! section, you can leave the tx-pool api as-is.
 //!
 //! * For `apply_extrinsic`, start by only implementing [`shared::SystemCall::Set`] for now, this is
@@ -58,7 +59,7 @@
 #![doc = docify::embed!("src/lib.rs", unsigned_set_value_does_not_work)]
 //!
 //! By the end of this section, you should fix the aforementioned 3 parts of your runtime, implement
-//! proper dispatch logic for [`shared::SystemCall`], and this should enable you yo pass all tests
+//! proper dispatch logic for [`shared::SystemCall`], and this should enable you to pass all tests
 //! in this file. Moreover, your should be able to play with your blockchain, through running a
 //! node, and interacting with it via `curl`, `wscat` or a similar tool. See `encode_examples` test.
 //!
@@ -300,6 +301,29 @@
 //! have ideally been implemented as a signed extension. In a separate branch, explore this, and ask
 //! for our feedback. If make progress on this front, DO NOT submit it for grading, as our grading
 //! will work with the simpler `RuntimeCallExt` model.
+//!
+//! ## Checklist (TL;DR)
+//!
+//! This might not be exhaustive. Feel free to check/add items here to make sure you finish all the tasks.
+//!
+//! - [ ] (1.1) Implement basic [apply_extrinsic](`Runtime::do_apply_extrinsic()`) using [`shared::SystemCall::Set`].
+//! - [ ] (2.1) [Finalize block](`Runtime::do_finalize_block()`) by setting correct `state_root` and `extrinsics_root`.
+//! - [ ] (2.2) Run your chain with two or more nodes to see if the non authoring node can import a block.
+//! - [ ] (3.1) Implement proper signature checking during [validate_transaction](`Runtime::do_validate_transaction()`).
+//! 	Reject unsigned or bad signature extrinsics. Make sure these steps are also done at `apply_extrinsic`.
+//! - [ ] (1.2) Properly implement [apply_extrinsic](`Runtime::do_apply_extrinsic()`).
+//! - [ ] (4) Implement a currency module in your runtime with following abilities
+//! 	- [ ] Ability to mint tokens to a destination account.
+//!     - [ ] Ability to transfer some tokens from sender to destination.
+//!     - [ ] Ability to transfer all tokens from sender to destination destroying sender in process.
+//!		- [ ] Notion of minimum balance that user needs to maintain to keep their account in storage. Account gets
+//! 		reaped if balance falls below minimum amount.
+//!     - [ ] Make sure Total Issuance is maintained correctly at all times.
+//!     - [ ] Prevent replay attacks by adding a nonce system for user transactions.
+//! - [ ] (3.2) Ability to add an optional tip while submitting a transaction. The tip increases the priority of the
+//! 	transaction. This tip should be deposited to the treasury account.
+//! - [ ] (5) Add a staking system on top of the currency system you built. Provide a way to bond tokens to the
+//! 	staking system. Bonded tokens are locked in user accounts and cannot be transferred.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
