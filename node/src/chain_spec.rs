@@ -1,4 +1,4 @@
-use runtime::RuntimeGenesisConfig;
+use runtime::{RuntimeGenesisConfig, WASM_BINARY};
 use sc_service::{ChainType, Properties};
 
 pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig>;
@@ -11,6 +11,7 @@ fn props() -> Properties {
 }
 
 pub fn development_config() -> Result<ChainSpec, String> {
+	#[allow(deprecated)]
 	Ok(ChainSpec::from_genesis(
 		"Development",
 		"dev",
@@ -22,5 +23,6 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		None,
 		Some(props()),
 		None,
+		WASM_BINARY.expect("Development wasm not available"),
 	))
 }
