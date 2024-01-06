@@ -304,7 +304,7 @@
 //!
 //! ## Checklist (TL;DR)
 //!
-//! This might not be exhaustive. Feel free to check/add items here to make sure you finish all the tasks.
+//! This might not be exhaustive. Feel free to check/add items here to make sure you finish all the required tasks.
 //!
 //! - [ ] (1.1) Implement basic [apply_extrinsic](`Runtime::do_apply_extrinsic()`) using [`shared::SystemCall::Set`].
 //! - [ ] (2.1) [Finalize block](`Runtime::do_finalize_block()`) by setting correct `state_root` and `extrinsics_root`.
@@ -319,8 +319,8 @@
 //!		- [ ] Notion of minimum balance that user needs to maintain to keep their account in storage. Account gets
 //! 		reaped if balance falls below minimum amount.
 //!     - [ ] Make sure Total Issuance is maintained correctly at all times.
-//!     - [ ] Prevent replay attacks by adding a nonce system for user transactions.
-//! - [ ] (3.2) Ability to add an optional tip while submitting a transaction. The tip increases the priority of the
+//! - [ ] (3.2) Prevent replay attacks by adding a nonce system for user transactions.
+//! - [ ] (3.3) Ability to add an optional tip while submitting a transaction. The tip increases the priority of the
 //! 	transaction. This tip should be deposited to the treasury account.
 //! - [ ] (5) Add a staking system on top of the currency system you built. Provide a way to bond tokens to the
 //! 	staking system. Bonded tokens are locked in user accounts and cannot be transferred.
