@@ -4,8 +4,9 @@
 //! > runtime using pure Rust. If you learn something new in this exercise, attribute it to his
 //! > work. We hope you to also explore new possibilities, and share it with other for education.
 //!
-//! > This assignment builds on top of the `mini_substrate` section of the pre-course material. It
-//! > is highly recommended to re-familiarize yourself with that first.
+//! > This assignment resembles the `mini_substrate` section of the pre-course material. It is
+//! > recommended to re-familiarize yourself with that if you have done it. Nonetheless, everything
+//! > here is self-contained.
 //!
 //! ## Context
 //!
@@ -19,7 +20,7 @@
 //! can leave it as-is.
 //!
 //! This node uses a testing block-authoring/consensus scheme in which a block is produced at fixed
-//! intervals. See `--consensus` cli option.
+//! intervals. See `--consensus` cli option if you want to speed the block production up or down.
 //!
 //! ## Warm Up
 //!
@@ -29,7 +30,6 @@
 //! 1. apply extrinsics
 //! 2. finalize a block upon authoring
 //! 3. validate extrinsics for the tx-pool
-
 //!
 //! are not complete. Your first task is to complete them, and make sure all local tests are
 //! passing, provide a simple `apply_extrinsic`, and finish `finalize_block`. For this first
@@ -304,25 +304,35 @@
 //!
 //! ## Checklist (TL;DR)
 //!
-//! This might not be exhaustive. Feel free to check/add items here to make sure you finish all the required tasks.
+//! This might not be exhaustive. Feel free to check/add items here to make sure you finish all the
+//! required tasks.
 //!
-//! - [ ] (1.1) Implement basic [apply_extrinsic](`Runtime::do_apply_extrinsic()`) using [`shared::SystemCall::Set`].
-//! - [ ] (2.1) [Finalize block](`Runtime::do_finalize_block()`) by setting correct `state_root` and `extrinsics_root`.
-//! - [ ] (2.2) Run your chain with two or more nodes to see if the non authoring node can import a block.
-//! - [ ] (3.1) Implement proper signature checking during [validate_transaction](`Runtime::do_validate_transaction()`).
-//! 	Reject unsigned or bad signature extrinsics. Make sure these steps are also done at `apply_extrinsic`.
+//! - [ ] (1.1) Implement basic [apply_extrinsic](`Runtime::do_apply_extrinsic()`) using
+//!   [`shared::SystemCall::Set`].
+//! - [ ] (2.1) [Finalize block](`Runtime::do_finalize_block()`) by setting correct `state_root` and
+//!   `extrinsics_root`.
+//! - [ ] (2.2) Run your chain with two or more nodes to see if the non authoring node can import a
+//!   block.
+//! - [ ] (3.1) Implement proper signature checking during
+//!   [validate_transaction](`Runtime::do_validate_transaction()`).
+//! 	Reject unsigned or bad signature extrinsics. Make sure these steps are also done at
+//! `apply_extrinsic`.
 //! - [ ] (1.2) Properly implement [apply_extrinsic](`Runtime::do_apply_extrinsic()`).
 //! - [ ] (4) Implement a currency module in your runtime with following abilities
 //! 	- [ ] Ability to mint tokens to a destination account.
 //!     - [ ] Ability to transfer some tokens from sender to destination.
-//!     - [ ] Ability to transfer all tokens from sender to destination destroying sender in process.
-//!		- [ ] Notion of minimum balance that user needs to maintain to keep their account in storage. Account gets
+//!     - [ ] Ability to transfer all tokens from sender to destination destroying sender in
+//!       process.
+//! 		- [ ] Notion of minimum balance that user needs to maintain to keep their account in storage.
+//!     Account gets
 //! 		reaped if balance falls below minimum amount.
 //!     - [ ] Make sure Total Issuance is maintained correctly at all times.
 //! - [ ] (3.2) Prevent replay attacks by adding a nonce system for user transactions.
-//! - [ ] (3.3) Ability to add an optional tip while submitting a transaction. The tip increases the priority of the
+//! - [ ] (3.3) Ability to add an optional tip while submitting a transaction. The tip increases the
+//!   priority of the
 //! 	transaction. This tip should be deposited to the treasury account.
-//! - [ ] (5) Add a staking system on top of the currency system you built. Provide a way to bond tokens to the
+//! - [ ] (5) Add a staking system on top of the currency system you built. Provide a way to bond
+//!   tokens to the
 //! 	staking system. Bonded tokens are locked in user accounts and cannot be transferred.
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -562,7 +572,6 @@ impl_runtime_apis! {
 	}
 
 	// Ignore everything after this.
-
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
 			OpaqueMetadata::new(Default::default())

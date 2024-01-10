@@ -5,31 +5,32 @@ use scale_info::TypeInfo;
 use sp_runtime::{generic, traits::BlakeTwo256};
 use sp_std::prelude::*;
 
-/// The Balance type. You should probably not change this.
+/// The Balance type. You should not change this.
 pub type Balance = u128;
-/// The block number type.
+/// The block number type. You should not change this.
 pub type BlockNumber = u32;
-/// Signature type. We use `sr25519` crypto.
+/// Signature type. We use `sr25519` crypto. You should not change this.
 pub type Signature = sp_core::sr25519::Signature;
 /// Account id type is the public key. We use `sr25519` crypto.
 ///
-/// be aware of using the right crypto type when using `sp-keyring` crate.
+/// be aware of using the right crypto type when using `sp_keyring` and similar crates.
 pub type AccountId = sp_core::sr25519::Public;
 
-/// The account id who's allowed to mint, and call `SudoRemark`. This is the sr25519 representation
-/// of `Alice` in `sp-keyring`.
+/// The account id who's allowed to mint, and call `Sudo*` operations. This is the sr25519
+/// representation of `Alice` in `sp-keyring`.
 pub const SUDO: [u8; 32] =
 	hex_literal::hex!["d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"];
 /// The treasury account to which tips should be deposited.
 pub const TREASURY: [u8; 32] =
 	hex_literal::hex!["ff3593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"];
-/// Minimum account balanced. No account balance should fall below this, unless if the account is
-/// being destroyed.
+/// Minimum account balanced.
 pub const MINIMUM_BALANCE: Balance = 10;
 /// The key to which [`SystemCall::Set`] will write the value.
 ///
 /// Hex: 0x76616c7565
 pub const VALUE_KEY: &[u8] = b"value";
+/// The key to which [`SystemCall::SudoSet`] will write the value.
+pub const SUDO_VALUE_KEY: &[u8] = b"sudo_value";
 /// Temporary key used to store the header. This should always be clear at the end of the block.
 ///
 /// Hex: 0x686561646572
@@ -38,16 +39,6 @@ pub const HEADER_KEY: &[u8] = b"header";
 ///
 /// Should always remain at the end of the block, and be cleared at the beginning of the next block.
 pub const EXTRINSICS_KEY: &[u8] = b"extrinsics";
-
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, TypeInfo, Debug, PartialEq, Eq, Clone)]
-pub enum StakingCall {
-	/// Bond `amount` form the sender, if they have enough free balance.
-	///
-	/// This results in `amount` being moved from their free balance to their reserved balance. See
-	/// [`AccountBalance`].
-	Bond { amount: Balance },
-}
 
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, TypeInfo, Debug, PartialEq, Eq, Clone)]
@@ -105,6 +96,16 @@ pub enum CurrencyCall {
 	/// Since the sender is a valid account, with more than [`MINIMUM_BALANCE`], the recipient
 	/// is also guaranteed to have at least [`MINIMUM_BALANCE`].
 	TransferAll { dest: AccountId },
+}
+
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Encode, Decode, TypeInfo, Debug, PartialEq, Eq, Clone)]
+pub enum StakingCall {
+	/// Bond `amount` form the sender, if they have enough free balance.
+	///
+	/// This results in `amount` being moved from their free balance to their reserved balance. See
+	/// [`AccountBalance`].
+	Bond { amount: Balance },
 }
 
 /// The outer runtime call.

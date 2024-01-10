@@ -31,6 +31,9 @@ use sp_runtime::{
 // * SudoSet vs. SudoRemark
 // * add sp_tracing boilerplate everywhere.
 // * the only way to kill should be TransferAll, not Transfer.
+// * idea: make them use with_storage_layer
+// * idea: generalize nonce as "prevent replay attacks"
+// * decouple from mini-substrate
 
 mod shared;
 
