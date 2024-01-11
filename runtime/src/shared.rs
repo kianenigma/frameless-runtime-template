@@ -30,6 +30,8 @@ pub const MINIMUM_BALANCE: Balance = 10;
 /// Hex: 0x76616c7565
 pub const VALUE_KEY: &[u8] = b"value";
 /// The key to which [`SystemCall::SudoSet`] will write the value.
+///
+/// Hex: 0x7375646f5f76616c7565
 pub const SUDO_VALUE_KEY: &[u8] = b"sudo_value";
 /// Temporary key used to store the header. This should always be clear at the end of the block.
 ///
@@ -47,11 +49,14 @@ pub enum SystemCall {
 	///
 	/// This will only ensure that `data` is remarked as the block data.
 	Remark { data: sp_std::prelude::Vec<u8> },
-	/// Same as `Remark`, but can only be called by [`SUDO`].
-	SudoRemark { data: sp_std::prelude::Vec<u8> },
 	/// Set the value under [`VALUE_KEY`] to `value`.
 	Set { value: u32 },
-	/// Upgrade the runtime to the given code.
+	/// Set the value under [`SUDO_VALUE_KEY`] to `value`.
+	///
+	/// Can only be called by Alice, aka [`SUDO`].
+	SudoSet { value: u32 },
+	/// Upgrade the runtime to the given code. In a real world situation, this should be heavily
+	/// permissioned.
 	///
 	/// This is only for you to play around with, and no graded test will use it.
 	Upgrade { code: sp_std::prelude::Vec<u8> },
@@ -152,12 +157,23 @@ pub type Block = generic::Block<Header, Extrinsic>;
 #[derive(Debug, Clone, Encode, Decode, PartialEq, Eq, Default)]
 pub struct AccountBalance {
 	/// The free balance that they have. This can be transferred.
-	pub free: Balance,
+	free: Balance,
 	/// The reserved balance that they have. This CANNOT be transferred.
-	pub reserved: Balance,
+	reserved: Balance,
 	/// The nonce of the account. Increment every time an account successfully transacts.
 	///
 	/// Once an account is created, it should have a nonce of 0. By the end of the transaction,
 	/// this value is increment to 1.
-	pub nonce: u32,
+	nonce: u32,
+}
+
+impl AccountBalance {
+	/// Create a new instance of `Self`.
+	///
+	/// This ensures that no instance of this type is created by mistake with less than
+	/// `MINIMUM_BALANCE`.
+	pub fn new_from_free(free: Balance) -> Self {
+		assert!(free >= MINIMUM_BALANCE, "free balance must be at least MINIMUM_BALANCE");
+		Self { free, ..Default::default() }
+	}
 }

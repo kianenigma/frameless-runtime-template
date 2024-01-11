@@ -4,10 +4,17 @@ version = "0.3.0"
 edition = "2021"
 
 [dependencies]
-parity-scale-codec = { version = "3.0.0", default-features = false, features = ["derive"] }
+parity-scale-codec = { version = "3.0.0", default-features = false, features = [
+	"derive",
+] }
 scale-info = { version = "2.6.0", default-features = false }
 serde = { version = "1.0.130", optional = true }
 log = { version = "0.4.14" }
+hex-literal = { version = "0.4.1" }
+docify = "0.2.0"
+serde_json = { version = "1.0.111", default-features = false, features = [
+	"alloc",
+] }
 
 sp-storage = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.4.0", default-features = false }
 sp-io = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.4.0", default-features = false }
@@ -21,9 +28,8 @@ sp-block-builder = { git = "https://github.com/paritytech/polkadot-sdk", tag = "
 sp-session = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.4.0", default-features = false }
 sp-transaction-pool = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.4.0", default-features = false }
 sp-offchain = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.4.0", default-features = false }
-hex-literal = { version = "0.4.1" }
+sp-genesis-builder = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.4.0", default-features = false }
 
-docify = "0.2.0"
 
 [build-dependencies]
 substrate-wasm-builder = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.4.0", optional = true }
@@ -40,6 +46,7 @@ std = [
 	"parity-scale-codec/std",
 	"scale-info/std",
 	"serde",
+	"serde_json/std",
 
 	"sp-storage/std",
 	"sp-io/std",
@@ -54,8 +61,7 @@ std = [
 	"sp-session/std",
 	"sp-transaction-pool/std",
 	"sp-offchain/std",
+	"sp-genesis-builder/std",
 
 	"substrate-wasm-builder",
 ]
-
-

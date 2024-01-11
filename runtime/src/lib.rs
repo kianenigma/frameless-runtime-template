@@ -1,4 +1,46 @@
-//! Welcome to the `Frame-less` exercise, the third edition.
+//! # FRAMELess Runtime
+//!
+//!  Welcome to the `FRAMEless` exercise, the fourth edition.
+//!
+//! > This assignment is based on Joshy's experiment, years ago, to explore building a Substrate
+//! > runtime using pure Rust. If you learn something new in this exercise, attribute it to his
+//! > work. We hope you to also explore new possibilities, and share it with other for education.
+//!
+//! > This assignment resembles the `mini_substrate` section of the pre-course material. It is
+//! > recommended to re-familiarize yourself with that if you have done it. Nonetheless, everything
+//! > here is self-contained.
+//!
+//! ## Context
+//!
+//! As the name suggest, this is Frame-less runtime. It is a substrate-compatible runtime, which you
+//! can easily run with companion `node`, without using `frame`.
+//!
+//! To run the `node`, execute `cargo run -- --dev`, possibly with `--release`. `--dev` will ensure
+//! that a new database is created each time, and your chain starts afresh.
+//!
+//! While you are welcome to explore the `node` folder, it is not part of this assignment, and you
+//! can leave it as-is.
+//!
+//! This node uses a testing block-authoring/consensus scheme in which a block is produced at fixed
+//! intervals. See `--consensus` cli option if you want to speed the block production up or down.
+//!
+//! ## Assignment
+//!
+//! ### 1 - Implement `apply_extrinsic` and `finalize_block`
+//!
+//! Consists of:
+//!
+//! - Proper state root and extrinsic root check
+//! - Proper signature check.
+//! - Only focus on implementing `SystemCall`. Leave the rest as `unimplemented!()`.
+//!
+//! TODO: we need a single account that can transact without any initial balance for this.
+//!
+//! ### 2 -
+
+//!# Old
+//!
+//!  Welcome to the `Frame-less` exercise, the third edition.
 //!
 //! > This assignment is based on Joshy's experiment, years ago, to explore building a Substrate
 //! > runtime using pure Rust. If you learn something new in this exercise, attribute it to his
@@ -358,11 +400,6 @@ use sp_runtime::{
 	ApplyExtrinsicResult,
 };
 use sp_std::prelude::*;
-#[cfg(feature = "std")]
-use sp_storage::well_known_keys;
-
-#[cfg(any(feature = "std", test))]
-use sp_runtime::{BuildStorage, Storage};
 
 use sp_core::{hexdisplay::HexDisplay, OpaqueMetadata, H256};
 use sp_runtime::traits::Hash;
@@ -403,21 +440,6 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 #[cfg(feature = "std")]
 pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
-}
-
-/// The type that provides the genesis storage values for a new chain.
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Default))]
-pub struct RuntimeGenesisConfig;
-
-#[cfg(feature = "std")]
-impl BuildStorage for RuntimeGenesisConfig {
-	fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
-		// make sure to not remove this, as it might break the node code.
-		storage.top.insert(well_known_keys::CODE.into(), WASM_BINARY.unwrap().to_vec());
-
-		// if you want more data in your genesis, add it here.
-		Ok(())
-	}
 }
 
 /// The main struct in this module. In frame this comes from `construct_runtime!` macro.
@@ -463,12 +485,24 @@ impl Runtime {
 		// fetch the header that was given to us at the beginning of the block.
 		let header = Self::get_state::<<Block as BlockT>::Header>(HEADER_KEY)
 			.expect("We initialized with header, it never got mutated, qed");
+
 		// and make sure to _remove_ it.
 		sp_io::storage::clear(&HEADER_KEY);
 
 		Runtime::print_state();
 		let header = Self::solution_finalize_block(header);
+
 		header
+	}
+
+	/// Apply a single extrinsic.
+	///
+	/// If an internal error occurs during the dispatch, such as "insufficient funds" etc, we don't
+	/// care about which variant of `DispatchError` you return. But, if a bad signature is provided,
+	/// then `Err(InvalidTransaction::BadProof)` must be returned.
+	fn do_apply_extrinsic(ext: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
+		info!(target: LOG_TARGET, "Entering apply_extrinsic: {:?}", ext);
+		Self::solution_apply_extrinsic(ext.clone())
 	}
 
 	/// Your code path to execute a block that has been previously authored.
@@ -476,8 +510,15 @@ impl Runtime {
 	/// Study this carefully, but you probably don't need to change it, other than providing a
 	/// proper `do_apply_extrinsic`.
 	fn do_execute_block(block: Block) {
-		// info!(target: LOG_TARGET, "Entering execute_block block: {:?} (exts: {})", block,
-		// block.extrinsics.len());
+		info!(
+			target: LOG_TARGET,
+			"Entering execute_block block: {:?} (exts: {})",
+			block,
+			block.extrinsics.len()
+		);
+
+		// clear any previous extrinsics. data.
+		// TODO: ask them to look into FRAME and if this is any different?
 		sp_io::storage::clear(&EXTRINSICS_KEY);
 
 		for extrinsic in block.clone().extrinsics {
@@ -493,7 +534,7 @@ impl Runtime {
 		// NOTE: if we forget to do this, how can you mess with the blockchain?
 		let raw_state_root = &sp_io::storage::root(VERSION.state_version())[..];
 		let state_root = H256::decode(&mut &raw_state_root[..]).unwrap();
-		assert_eq!(block.header.state_root, state_root);
+		assert_eq!(block.header.state_root, state_root, "state root mismatch!");
 
 		// check extrinsics root
 		let extrinsics = Self::get_state::<Vec<Vec<u8>>>(EXTRINSICS_KEY).unwrap_or_default();
@@ -504,16 +545,6 @@ impl Runtime {
 		info!(target: LOG_TARGET, "Finishing block import.");
 	}
 
-	/// Apply a single extrinsic.
-	///
-	/// If an internal error occurs during the dispatch, such as "insufficient funds" etc, we don't
-	/// care about which variant of `DispatchError` you return. But, if a bad signature is provided,
-	/// then `Err(InvalidTransaction::BadProof)` must be returned.
-	fn do_apply_extrinsic(ext: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
-		info!(target: LOG_TARGET, "Entering apply_extrinsic: {:?}", ext);
-		Self::solution_apply_extrinsic(ext.clone())
-	}
-
 	fn do_validate_transaction(
 		_source: TransactionSource,
 		ext: <Block as BlockT>::Extrinsic,
@@ -522,6 +553,37 @@ impl Runtime {
 		log::debug!(target: LOG_TARGET,"Entering validate_transaction. tx: {:?}", ext);
 
 		Self::solution_validate_transaction(_source, ext, _block_hash)
+	}
+
+	/// This is called to create your chain's genesis state. See the example below, and the
+	/// documentation of the trait to learn how you should implement it!
+	fn do_create_default_config() -> Vec<u8> {
+		let genesis = serde_json::json!({
+			"value": 42,
+		});
+		serde_json::to_string(&genesis)
+			.expect("genesis state should be convertible to json")
+			.into_bytes()
+	}
+
+	fn do_build_config(input: Vec<u8>) -> sp_genesis_builder::Result {
+		let json_genesis: serde_json::Value =
+			serde_json::from_slice(&input).expect("JSON blob invalid");
+		if let serde_json::Value::Object(genesis) = json_genesis {
+			for (key, value) in genesis {
+				log::info!(target: LOG_TARGET, "inserting {:?} -> {:?} into genesis", key, value);
+				sp_io::storage::set(
+					&key.encode(),
+					&value
+						.as_number()
+						.and_then(|n| n.as_u64())
+						.expect("only support integer numbers in genesis JSON")
+						.encode(),
+				);
+			}
+		}
+
+		Ok(())
 	}
 }
 
@@ -571,6 +633,16 @@ impl_runtime_apis! {
 		}
 	}
 
+	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
+		fn create_default_config() -> Vec<u8> {
+			Runtime::do_create_default_config()
+		}
+
+		fn build_config(config: Vec<u8>) -> sp_genesis_builder::Result {
+			Runtime::do_build_config(config)
+		}
+	}
+
 	// Ignore everything after this.
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
@@ -606,7 +678,7 @@ impl_runtime_apis! {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::shared::RuntimeCallExt;
+	use crate::shared::{AccountId, RuntimeCallExt};
 	use parity_scale_codec::Encode;
 	use shared::{Extrinsic, RuntimeCall, VALUE_KEY};
 	use sp_core::hexdisplay::HexDisplay;
@@ -633,12 +705,12 @@ mod tests {
 		Extrinsic::new(call, None).unwrap()
 	}
 
-	fn signed_set_value(value: u32, nonce: u32) -> Extrinsic {
+	fn signed_set_value(value: u32, nonce: u32) -> (Extrinsic, AccountId) {
 		let call = set_value_call(value, nonce);
 		let signer = sp_keyring::AccountKeyring::Alice;
 		let payload = call.encode();
 		let signature = signer.sign(&payload);
-		Extrinsic::new(call, Some((signer.public(), signature, ()))).unwrap()
+		(Extrinsic::new(call, Some((signer.public(), signature, ()))).unwrap(), signer.public())
 	}
 
 	/// Return the list of extrinsics that are noted in the `EXTRINSICS_KEY`.
@@ -646,6 +718,12 @@ mod tests {
 		sp_io::storage::get(EXTRINSICS_KEY)
 			.and_then(|bytes| <Vec<Vec<u8>> as Decode>::decode(&mut &*bytes).ok())
 			.unwrap_or_default()
+	}
+
+	/// Fund an account with the `MINIMUM_BALANCE` such that it can transact. This can be empty for
+	/// now, but once you implement the currency part, you need to use it.
+	fn fund_account(who: AccountId) {
+		solution::fund_account(who)
 	}
 
 	#[test]
@@ -697,8 +775,9 @@ mod tests {
 	#[test]
 	fn signed_set_value_works() {
 		// A signed `Set` works.
-		let ext = signed_set_value(42, 0);
+		let (ext, who) = signed_set_value(42, 0);
 		TestExternalities::new_empty().execute_with(|| {
+			fund_account(who);
 			assert_eq!(Runtime::get_state::<u32>(VALUE_KEY), None);
 			assert_eq!(noted_extrinsics().len(), 0);
 
@@ -773,10 +852,10 @@ mod tests {
 	#[test]
 	fn import_and_author_equal() {
 		// a few dummy extrinsics.
-		let ext1 = signed_set_value(42, 0);
-		let ext2 = signed_set_value(43, 1);
-		let ext3 = signed_set_value(44, 2);
-		let ext4 = unsigned_set_value(2);
+		let (ext1, _) = signed_set_value(42, 0);
+		let (ext2, _) = signed_set_value(43, 1);
+		let (ext3, who) = signed_set_value(44, 2);
+		let ext4 = unsigned_set_value(3);
 
 		let header = shared::Header {
 			digest: Default::default(),
@@ -788,6 +867,7 @@ mod tests {
 
 		// authoring a block:
 		let block = TestExternalities::new_empty().execute_with(|| {
+			fund_account(who);
 			Runtime::do_initialize_block(&header);
 			drop(header);
 
@@ -826,6 +906,7 @@ mod tests {
 
 		// now re-importing it.
 		TestExternalities::new_empty().execute_with(|| {
+			fund_account(who);
 			// This should internally check state/extrinsics root. If it does not panic, then we are
 			// gucci.
 			Runtime::do_execute_block(block.clone());

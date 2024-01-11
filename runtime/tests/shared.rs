@@ -1,38 +1,38 @@
 //! Shared types used in your solution, and our grading tool.
 
-#![allow(unused)]
-
 use parity_scale_codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{generic, traits::BlakeTwo256};
 use sp_std::prelude::*;
 
-/// The Balance type. You should probably not change this.
+/// The Balance type. You should not change this.
 pub type Balance = u128;
-/// The block number type.
+/// The block number type. You should not change this.
 pub type BlockNumber = u32;
-/// Signature type. We use `sr25519` crypto.
+/// Signature type. We use `sr25519` crypto. You should not change this.
 pub type Signature = sp_core::sr25519::Signature;
 /// Account id type is the public key. We use `sr25519` crypto.
 ///
-/// be aware of using the right crypto type when using `sp-keyring` crate.
+/// be aware of using the right crypto type when using `sp_keyring` and similar crates.
 pub type AccountId = sp_core::sr25519::Public;
 
-/// The account id who's allowed to mint, and call `SudoRemark`. This is the sr25519 representation
-/// of `Alice` in `sp-keyring`.
+/// The account id who's allowed to mint, and call `Sudo*` operations. This is the sr25519
+/// representation of `Alice` in `sp-keyring`.
 pub const SUDO: [u8; 32] =
 	hex_literal::hex!["d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"];
 /// The treasury account to which tips should be deposited.
 pub const TREASURY: [u8; 32] =
 	hex_literal::hex!["ff3593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"];
-/// Minimum account balanced. No account balance should fall below this, unless if the account is
-/// being destroyed. In other words, the `free` balance of each account must at all times be greater
-/// than or equal to this, or equal to zero.
+/// Minimum account balanced.
 pub const MINIMUM_BALANCE: Balance = 10;
 /// The key to which [`SystemCall::Set`] will write the value.
 ///
 /// Hex: 0x76616c7565
 pub const VALUE_KEY: &[u8] = b"value";
+/// The key to which [`SystemCall::SudoSet`] will write the value.
+///
+/// Hex: 0x7375646f5f76616c7565
+pub const SUDO_VALUE_KEY: &[u8] = b"sudo_value";
 /// Temporary key used to store the header. This should always be clear at the end of the block.
 ///
 /// Hex: 0x686561646572
@@ -44,26 +44,19 @@ pub const EXTRINSICS_KEY: &[u8] = b"extrinsics";
 
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, TypeInfo, Debug, PartialEq, Eq, Clone)]
-pub enum StakingCall {
-	/// Bond `amount` form the sender, if they have enough free balance.
-	///
-	/// This results in `amount` being moved from their free balance to their reserved balance. See
-	/// [`AccountBalance`].
-	Bond { amount: Balance },
-}
-
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, TypeInfo, Debug, PartialEq, Eq, Clone)]
 pub enum SystemCall {
 	/// Do nothing.
 	///
 	/// This will only ensure that `data` is remarked as the block data.
 	Remark { data: sp_std::prelude::Vec<u8> },
-	/// Same as `Remark`, but can only be called by [`SUDO`].
-	SudoRemark { data: sp_std::prelude::Vec<u8> },
 	/// Set the value under [`VALUE_KEY`] to `value`.
 	Set { value: u32 },
-	/// Upgrade the runtime to the given code.
+	/// Set the value under [`SUDO_VALUE_KEY`] to `value`.
+	///
+	/// Can only be called by Alice, aka [`SUDO`].
+	SudoSet { value: u32 },
+	/// Upgrade the runtime to the given code. In a real world situation, this should be heavily
+	/// permissioned.
 	///
 	/// This is only for you to play around with, and no graded test will use it.
 	Upgrade { code: sp_std::prelude::Vec<u8> },
@@ -103,11 +96,21 @@ pub enum CurrencyCall {
 	/// ### Errors
 	///
 	/// * If any type of arithmetic operation overflows.
-	/// * If the sender has any free balance left.
+	/// * If the sender has any reserve balance left.
 	///
 	/// Since the sender is a valid account, with more than [`MINIMUM_BALANCE`], the recipient
 	/// is also guaranteed to have at least [`MINIMUM_BALANCE`].
 	TransferAll { dest: AccountId },
+}
+
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Encode, Decode, TypeInfo, Debug, PartialEq, Eq, Clone)]
+pub enum StakingCall {
+	/// Bond `amount` form the sender, if they have enough free balance.
+	///
+	/// This results in `amount` being moved from their free balance to their reserved balance. See
+	/// [`AccountBalance`].
+	Bond { amount: Balance },
 }
 
 /// The outer runtime call.
@@ -154,12 +157,23 @@ pub type Block = generic::Block<Header, Extrinsic>;
 #[derive(Debug, Clone, Encode, Decode, PartialEq, Eq, Default)]
 pub struct AccountBalance {
 	/// The free balance that they have. This can be transferred.
-	pub free: Balance,
+	pub(crate) free: Balance,
 	/// The reserved balance that they have. This CANNOT be transferred.
-	pub reserved: Balance,
+	pub(crate) reserved: Balance,
 	/// The nonce of the account. Increment every time an account successfully transacts.
 	///
 	/// Once an account is created, it should have a nonce of 0. By the end of the transaction,
 	/// this value is increment to 1.
-	pub nonce: u32,
+	pub(crate) nonce: u32,
+}
+
+impl AccountBalance {
+	/// Create a new instance of `Self`.
+	///
+	/// This ensures that no instance of this type is created by mistake with less than
+	/// `MINIMUM_BALANCE`.
+	pub fn new_from_free(free: Balance) -> Self {
+		assert!(free >= MINIMUM_BALANCE, "free balance must be at least MINIMUM_BALANCE");
+		Self { free, ..Default::default() }
+	}
 }

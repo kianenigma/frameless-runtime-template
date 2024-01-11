@@ -7,6 +7,7 @@ use crate::{
 		AccountId, Balance, Block, CurrencyCall, Extrinsic, RuntimeCall, StakingCall, SystemCall,
 		EXTRINSICS_KEY, MINIMUM_BALANCE, SUDO, TREASURY, VALUE_KEY,
 	},
+	solution::currency::AccountBalance,
 	Runtime, LOG_TARGET, VERSION,
 };
 use parity_scale_codec::{Decode, Encode};
@@ -78,6 +79,16 @@ impl From<StakingCall> for staking::Call<Runtime> {
 }
 
 #[allow(unused)]
+pub(crate) fn fund_account(who: AccountId) {
+	BalancesMap::<Runtime>::mutate(who, |b| match b {
+		Some(b) => assert!(b.free >= MINIMUM_BALANCE),
+		None => {
+			*b = Some(AccountBalance::new_from_free(MINIMUM_BALANCE));
+		},
+	})
+}
+
+#[allow(unused)]
 impl Runtime {
 	pub(crate) fn solution_apply_extrinsic(ext: Extrinsic) -> ApplyExtrinsicResult {
 		let sender = Self::inner_pre_dispatch(&ext)?;
@@ -89,8 +100,9 @@ impl Runtime {
 				Ok(())
 			},
 			RuntimeCall::System(SystemCall::Remark { data: _ }) => Ok(()),
-			RuntimeCall::System(SystemCall::SudoRemark { data: _ }) => {
+			RuntimeCall::System(SystemCall::SudoSet { value }) => {
 				if sender == AccountId::unchecked_from(SUDO) {
+					sp_io::storage::set(VALUE_KEY, &value.encode());
 					Ok(())
 				} else {
 					Err(DispatchError::BadOrigin)
@@ -101,12 +113,12 @@ impl Runtime {
 				Ok(())
 			},
 			RuntimeCall::Currency(currency_call) => {
-				let my_call: currency::Call<Runtime> = currency_call.into();
-				my_call.dispatch(sender)
+				let call: currency::Call<Runtime> = currency_call.into();
+				call.dispatch(sender)
 			},
 			RuntimeCall::Staking(staking_call) => {
-				let my_call: staking::Call<Runtime> = staking_call.into();
-				my_call.dispatch(sender)
+				let call: staking::Call<Runtime> = staking_call.into();
+				call.dispatch(sender)
 			},
 		};
 
@@ -245,6 +257,11 @@ impl Runtime {
 		Self::collect_tip(ext, signer)?;
 
 		let mut balance = BalancesMap::<Runtime>::get(signer).unwrap_or_default();
+		match balance.free {
+			0 => return Err(TransactionValidityError::Invalid(InvalidTransaction::Payment)),
+			x if x < MINIMUM_BALANCE => panic!("Should not be possible!"),
+			_ => (),
+		}
 		balance.nonce += 1;
 		BalancesMap::<Runtime>::set(signer.clone(), balance);
 

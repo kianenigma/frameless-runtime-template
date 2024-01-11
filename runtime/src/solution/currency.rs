@@ -104,6 +104,11 @@ impl<T: Config> Default for AccountBalance<T> {
 }
 
 impl<T: Config> AccountBalance<T> {
+	pub fn new_from_free(free: T::Balance) -> Self {
+		assert!(free >= T::MinimumBalance::get(), "free balance must be at least MINIMUM_BALANCE");
+		Self { free, ..Default::default() }
+	}
+
 	pub(crate) fn reserve(&mut self, amount: T::Balance) -> DispatchOutcome {
 		match self.free.checked_sub(&amount) {
 			Some(leftover) if leftover >= T::MinimumBalance::get() => {
