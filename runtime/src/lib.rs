@@ -2,13 +2,13 @@
 //!
 //!  Welcome to the `FRAMEless` exercise, the fourth edition.
 //!
-//! > This assignment is based on Joshy's experiment, years ago, to explore building a Substrate
+//! > This assignment is based on Joshy's experiment years ago to explore building a Substrate
 //! > runtime using pure Rust. If you learn something new in this exercise, attribute it to his
 //! > work. We hope you to also explore new possibilities, and share it with other for education.
 //!
 //! > This assignment resembles the `mini_substrate` section of the pre-course material. It is
 //! > recommended to re-familiarize yourself with that if you have done it. Nonetheless, everything
-//! > here is self-contained.
+//! > here is self-contained. Don't worry if you have not done `mini-substrate`.
 //!
 //! ## Context
 //!
@@ -21,218 +21,244 @@
 //! While you are welcome to explore the `node` folder, it is not part of this assignment, and you
 //! can leave it as-is.
 //!
-//! This node uses a testing block-authoring/consensus scheme in which a block is produced at fixed
-//! intervals. See `--consensus` cli option if you want to speed the block production up or down.
+//! This `node` uses a testing block-authoring/consensus scheme in which a block is produced at
+//! fixed intervals. See `--consensus` cli option if you want to speed the block production up or
+//! down.
 //!
 //! ## Assignment
 //!
-//! ### 1 - Implement `apply_extrinsic` and `finalize_block`
+//! You will design a simple substrate runtime with the following properties in this assignment:
 //!
-//! Consists of:
+//! - Only signed extrinsics are accepted, so you will learn signature verification.
+//! - Basic calls for testing/learning, mainly represented in [`shared::RuntimeCall::System`].
+//! - Basic currency system.
+//! - Basic staking/reserving system.
+//! - Nonce system, to prevent replay attacks and similar issues.
+//! - Tipping, which is there to mimic transaction fee payment.
 //!
-//! - Proper state root and extrinsic root check
-//! - Proper signature check.
-//! - Only focus on implementing `SystemCall`. Leave the rest as `unimplemented!()`.
+//! > Given that we have no notion of inherents or unsigned extrinsics here, the words transaction
+//! > and extrinsic means the same thing in this assignment.
 //!
-//! TODO: we need a single account that can transact without any initial balance for this.
+//! Read the rest of this file and `shared.rs` carefully, as it is your main specification of what
+//! you have to implement.
 //!
-//! ### 2 -
-
-//!# Old
+//! ### Prelude: Knowledge Recap
 //!
-//!  Welcome to the `Frame-less` exercise, the third edition.
+//! #### Block Authoring and Importing
 //!
-//! > This assignment is based on Joshy's experiment, years ago, to explore building a Substrate
-//! > runtime using pure Rust. If you learn something new in this exercise, attribute it to his
-//! > work. We hope you to also explore new possibilities, and share it with other for education.
+//! Recall that the block author does the following:
 //!
-//! > This assignment resembles the `mini_substrate` section of the pre-course material. It is
-//! > recommended to re-familiarize yourself with that if you have done it. Nonetheless, everything
-//! > here is self-contained.
+//! ```no_compile
+//! (possibly call into `validate_transaction` periodically)
 //!
-//! ## Context
+//! Core::initialize_block(raw_header)
+//! loop {
+//! 		BlockBuilder::apply_extrinsic(ext)
+//! }
+//! BlockBuilder::finalize_block() -> final_header
+//! ```
 //!
-//! As the name suggest, this is Frame-less runtime. It is a substrate-compatible runtime, which you
-//! can easily run with companion `node`, without using `frame`.
+//! And the block importer only calls into:
 //!
-//! To run the `node`, execute `cargo run -- --dev`, possibly with `--release`. `--dev` will ensure
-//! that a new database is created each time, and your chain starts afresh.
+//! ```no_compile
+//! Core::execute_block(block)
+//! ```
 //!
-//! While you are welcome to explore the `node` folder, it is not part of this assignment, and you
-//! can leave it as-is.
+//! We need to make sure that these two code paths each record the **correct and equal** state and
+//! extrinsic root in the header. More about this in step 0. In other words, these two code paths
+//! must execute the exact same logic and produce the exact same side effects.
 //!
-//! This node uses a testing block-authoring/consensus scheme in which a block is produced at fixed
-//! intervals. See `--consensus` cli option if you want to speed the block production up or down.
+//! #### Apply vs. Dispatch
 //!
-//! ## Warm Up
+//! When an extrinsic passes enough mandatory checks to justify its existence in a block, we call
+//! this extrinsic to be apply-able. In other words, the extrinsic will get executed while authoring
+//! and importing phase.
 //!
-//! First, study the runtime code with the help of your instructor. You will soon realize that it is
-//! missing some key components. Most notably, the logic to:
+//! Checks that must happen in apply phase are those that are mandatory to make sure a blockchain is
+//! sound and safe. These include:
 //!
-//! 1. apply extrinsics
-//! 2. finalize a block upon authoring
-//! 3. validate extrinsics for the tx-pool
+//! - Signature verification
+//! - Payment of any fees and tips.
+//! - Nonce check.
 //!
-//! are not complete. Your first task is to complete them, and make sure all local tests are
-//! passing, provide a simple `apply_extrinsic`, and finish `finalize_block`. For this first
-//! section, you can leave the tx-pool api as-is.
+//! > For each of the above, take a moment to think about what happens if we don't do them. How is
+//! > that blockchain vulnerable?
 //!
-//! * For `apply_extrinsic`, start by only implementing [`shared::SystemCall::Set`] for now, this is
-//!   the only one used in tests.
-//! * For `finalize_block`, your main task is to obtain the `raw_header` that is placed onchain in
-//!   `initialize_block`, and to place a correct `state_root` and `extrinsics_root` in it.
+//! Failure to meet any of these requirements means that this transaction is not even worth being in
+//! the block and it should be discarded. This is what we mean by a "failed apply", and it is
+//! represented `ApplyExtrinsicResult` being `Err(_)`.
 //!
-//! Fixing `finalize_block` makes the block be a valid import-able block. This test demonstrates
-//! this property:
+//! The outcome of applying can itself be a failure or success. This inner execution of the
+//! extrinsic is called "dispatch".
+//!
+//! Contrary, a dispatch error means that the extrinsic is worth keeping in the block, but whatever
+//! it wished to do may have failed. This is represented by `ApplyExtrinsicResult` being
+//! `Ok(Err(_))`.
+//!
+//! Use this information to return the correct `ApplyExtrinsicResult` in `do_apply_extrinsic`.
+//!
+//!
+//! #### Transaction Pool Validation
+//!
+//! Recall that the transaction pool can asynchronously, and at arbitrary intervals, ask the runtime
+//! to validate the transactions. Two rule of thumbs about this:
+//!
+//! 1. The transaction pool validation must be cheap and static. As in, you MUST NOT dispatch
+//!    anything in the pool validation phase.
+//! 2. The transaction pool validation must contain all the checks that make a transaction
+//!    apply-able.
+//!
+//! #### Extrinsic Format
+//!
+//! The extrinsic format in this assignment is defined in `shared.rs`:
+#![doc = docify::embed!("src/shared.rs", Extrinsic)]
+//!
+//! When this extrinsic is unpacked, the runtime will first look at the signature, tip and nonce. If
+//! they meet all relevant conditions, this transaction is apply-able, and should be dispatched.
+//! This depends on the inner `RuntimeCall`. This type represent the different modules in your
+//! runtime.
+//!
+//! #### Storage
+//!
+//! You will need to alter the runtime state in this assignment. Use `sp_io::storage` apis for this.
+//! You are welcome to create more ergonomic abstractions on top of this.
+//!
+//! ### Step 0 - Basics
+//!
+//! In this section you implement all the fundamental parts of your runtime. This step is slightly
+//! longer than the rest. Make sure to spend enough time on it as it it is the foundation for the
+//! rest of the assignment.
+//!
+//! - **Proper signature check**. You need to look into `UncheckedExtrinsic.signature`, ensure it is
+//!   `Some`, and only accept those that are properly signed. The signing payload should be the
+//!   entire `UncheckedExtrinsic.function` (and `Extra`, which is `()`). Since `UncheckedExtrinsic`
+//!   is the type that is used in all substrate-based chains, you can look at the methods and traits
+//!   implemented for this type for inspiration. For example, look into `impl Checkable for
+//!   UncheckedExtrinsic`.
+//! - **Implement `SystemCall`**. Once you verify the signature, you can get a signer `AccountId`
+//!   out of the extrinsic. Use this to implement [`shared::SystemCall`] dispatchables, such as
+//!   `SetValue`.
+//!
+//! The above two steps should both be implemented as a part of `apply_extrinsic`.
+//!
+//! - **Root calculation**: Once you have successful transactions processed by your runtime you need
+//!   to make sure your state and extrinsic root are correct.
+//!     - After each successful `apply_extrinsic`, if the transaction passes all the checks to be
+//!       apply-able, note the encoded extrinsic in `EXTRINSICS_KEY`.
+//!     - In `finalize_block`, compute the extrinsics root from the above.
+//!     - Flush the `EXTRINSICS_KEY` at the beginning of the next block authoring's
+//!   `initialize_block`.
+//!
+//! The `execute_block` given to you is already complete. You can look into it and reverse-engineer
+//! how to calculate roots, and what is expected of your in the block authoring part.
+//!
+//! In all of the above you mainly need to finish `do_apply_extrinsic` and `do_finalize_block`.
+//!
+//! Lastly, you need to update `validate_transaction` to make sure transactions with bad signature
+//! are rejected.
+//!
+//! By the end of this section, you should be able to pass all the unit tests provided to you.
+//!
+//! Most importantly, the following test ensures that your block authoring and importing are equal
+//! and correct.
 #![doc = docify::embed!("src/lib.rs", import_and_author_equal)]
 //!
-//! Also, if you run your chain with two nodes, you will be able to test this property. See Hints
-//! section below.
+//! Also, if you run your chain with two nodes, you will be able to test this property. Lastly, you
+//! are advised to use a JSON-RPC client at this stage and try simple transactions like `SetValue`
+//! and observe their effects. See the material in "Interacting with Substrate" lecture.
 //!
-//! You will soon realize that you are asked to implement proper signature checking. In this
-//! assignment, we are using the types from [`sp_runtime::generic`] (see [`shared`]). Studying these
-//! types and how the handle signatures within themselves should help you implement proper signature
-//! checking.
+//! #### Apply Errors
 //!
-//! All in all, your runtime should only work with signed extrinsics, and instantly reject unsigned
-//! (or badly signed) extrinsics. See the following tests:
-#![doc = docify::embed!("src/lib.rs", bad_signature_fails)]
+//! [`sp_runtime::transaction_validity::InvalidTransaction::BadProof`] if the extrinsic has an
+//! invalid signature.
 //!
-#![doc = docify::embed!("src/lib.rs", unsigned_set_value_does_not_work)]
+//! #### Transaction Pool Validation Errors
 //!
-//! By the end of this section, you should fix the aforementioned 3 parts of your runtime, implement
-//! proper dispatch logic for [`shared::SystemCall`], and this should enable you to pass all tests
-//! in this file. Moreover, your should be able to play with your blockchain, through running a
-//! node, and interacting with it via `curl`, `wscat` or a similar tool. See `encode_examples` test.
+//! [`sp_runtime::transaction_validity::InvalidTransaction::BadProof`] if the extrinsic has an
+//! invalid signature.
 //!
-//! > Most of [`shared::SystemCall`] instances are for you to use for learning. Try and upgrade your
-//! > chain using [`shared::SystemCall::Upgrade`]!
+//! ### 1 - Currency
 //!
-//! ## Main Task
+//! Look into [`shared::CurrencyCall`] and implement the requirement as specified in the docs. Pay
+//! close attention to the existential deposit section.
 //!
-//! Once you are done with the above, you can start your main objective, which is to re-implement
-//! everything you have done for `mini_substrate` here. That is, implement a simple currency system,
-//! with abilities to mint, transfer and reserve, and a staking system on top of it. Additionally,
-//! we are asking you to add a basic tip and nonce system as well.
+//! ### 2 - Staking
 //!
-//! ## Specification
+//! Look into [`shared::StakingCall`] and implement the requirement as specified in the docs.
 //!
-//! ### Dispatchables
+//! ### 3 - Tipping
 //!
-//! Similar to `mini_substrate`, the exact expectation of behavior for each instance of
-//! [`shared::RuntimeCallExt`] is document in its own documentation. This should be identical to
-//! what you had to code for `mini_substrate`.
+//! The ability to tip is baked into [`shared::RuntimeCallExt::tip`]. Up until this point, you were
+//! expected to ignore this field.
 //!
-//! > As noted above, whether you want to use a trait like `Dispatchable` or not is up to you.
+//! The tip is meant to represent transaction fees. But, to keep the assignment simple, they are
+//! *optional*, therefore naming them "tip".
 //!
-//! ### Storage
+//! If [`shared::RuntimeCallExt::tip`] is `Some(_)`, the sender's ability to pay this amount is now
+//! a mandatory condition for the transaction to be apply-able. This means it must be checked in
+//! both:
 //!
-//! Exact same expectation as `mini_substrate`.
+//! * `apply_extrinsic`
+//! * `validate_transaction`
 //!
-//! * mapping [`shared::AccountId`] to [`shared::AccountBalance`] kept at `BalancesMap +
-//!   encode(account)`.
-//! * value of type [`shared::Balance`] for total issuance kept at `TotalIssuance`.
+//! Paying the tip must not cause the account's existence to change. Specifically, an account cannot
+//! be destroyed due to the tip. This is because tip payment happens prior to dispatch, and the
+//! dispatch logic of the runtime assumes all accounts start at an "existing" state.
 //!
-//! > Again, you are free to use the same storage abstractions as in `mini_substrate` or not. We
-//! > highly advice you do ;)
+//! > For example, an account that has 20 tokens cannot transfer 5 and tip 15, but it can transfer
+//! > 15 and tip 5.
 //!
-//! ### Additional Logic
+//! All tips are transferred to [`TREASURY`], as if [`TREASURY`] was an account's public key. That
+//! is, the account is stored under "BalancesMap", and uses the same [`AccountBalance`], but it can
+//! only ever have `free` balance.
 //!
-//! Notable new desired behavior, compared to `mini_substrate`:
+//! The only exception of account existence is about [`TREASURY`]. If this account is non-existent,
+//! it can receive tips that are smaller than [`EXISTENTIAL_DEPOSIT`]. If by the end of the dispatch
+//! the [`TREASURY`] still has less than [`EXISTENTIAL_DEPOSIT`], this amount should be burnt.
+//! Burning is the opposite of minting, and should update the total issuance as well.
 //!
-//! #### 1. Tipping
+//! ## Apply Errors
 //!
-//! The final [`shared::Extrinsic`]'s `Call`, namely [`shared::RuntimeCallExt`] contains `tip`
-//! field. As the name suggests, this is some additional funds that are sent by the user to chain.
-//! Other than this optional tip, all other extrinsics are free.
+//! [`sp_runtime::transaction_validity::InvalidTransaction::Payment`] if the extrinsic cannot pay
+//! for its declared tip.
 //!
-//! Tipped extrinsics are prioritized over non-tipped ones through the virtue of a higher
-//! `priority`. This is further explained in `validate_transaction` section below.
+//! ## Transaction Pool Validation Errors
 //!
-//! Deducting the tip from the sender must happen prior to executing anything else in the extrinsic.
-//! Failure to pay for fees is always a full failure of the extrinsic (similar to a failed signature
-//! check).
+//! [`sp_runtime::transaction_validity::InvalidTransaction::Payment`] if the extrinsic cannot pay
+//! for its declared tip.
 //!
-//! Once the tip is deducted, it is added to an account id specified by [`shared::TREASURY`]. The
-//! same rules about account creation apply to this account as well.
+//! If successful, the `priority` of the transaction should be increased by the tip amount, when
+//! when converted to u64. Saturating conversion should be used.
 //!
-//! Total issuance must be kept up to date in all of the cases above.
+//! ### Nonce
 //!
-//! #### 2. Account Creation/Deletion
-//!
-//! An account that starts a transaction with non-zero `free` and `reserved`, but finishes it with
-//! equal to zero values for `free` and `reserved` (by `TransferAll` or equivalent) is notionally
-//! "destroyed". Such an account should not be kept in storage with a value like
-//! `Default::default()`. Instead, it should be removed from storage. This is crucial to save space
-//! in your blockchain.
-//!
-//! In such cases, the nonce information is also forgotten. This is not how things work in a real
-//! blockchain, as it opens the door for replay attacks, but we keep it like this for simplicity.
-//!
-//! #### Nonce
+//! The last filed of [`shared::AccountBalance`] that has been thus far ignored is the nonce.
 //!
 //! You should implement a nonce system, as explained as a part of the tx-pool lecture. In short,
 //! the validation of each transaction should `require` nonce `(sender, n-1).encode()` and provide
-//! `(sender, n).encode()`. See `TaggedTransactionQueue` below for more information.
+//! `(sender, n).encode()`. All accounts are created with nonce 0. The first valid transaction nonce
+//! is 0, which if successful, will set the account nonce to 1.
 //!
-//! Note that your nonce should be checked as a part of transaction pool api, which means it should
-//! be implemented as efficiently as possibly, next to other checks that need to happen.
+//! ## Apply Errors
 //!
-//! ### `BlockBuilder::apply_extrinsic`
+//! [`sp_runtime::transaction_validity::InvalidTransaction::Future`] or `Stale` if the transaction's
+//! nonce is not correct.
 //!
-//! One of your objectives is to implement the logic for `apply_extrinsic`. Here, we describe what
-//! return value we expect from it.
+//! ## Transaction Pool Validation Errors
 //!
-//! Recall that [`ApplyExtrinsicResult`] is essentially a nested `Result`. The outer one says
-//! whether _applying_ the extrinsic to the block was fine, and the inner one says whether the
-//! extrinsic itself was *dispatched* fine.
+//! [`sp_runtime::transaction_validity::InvalidTransaction::Future`] or `Stale` if the transaction's
+//! nonce is not correct.
 //!
-//! For example, a failed transfer will still reside in a block, and is *applied* successfully, but
-//! it is not *dispatched* successfully. So such an extrinsic should something like `Ok(Err(_))` in
-//! its `apply_extrinsic`.
+//! If valid, the correct `provides` and `requires` should be set.
 //!
-//! Your `apply_extrinsic` should:
+//! > Note that unlike signature check, account existence and tipping, the behavior of
+//! > `apply_extrinsic` and `validate_transaction` is noticeably different with respect to nonce.
 //!
-//! * Return `Err` with [`sp_runtime::transaction_validity::TransactionValidityError::Invalid`] and
-//!   [`sp_runtime::transaction_validity::InvalidTransaction::BadProof`] if the extrinsic has an
-//!   invalid signature.
-//! * Return `Err` with [`sp_runtime::transaction_validity::TransactionValidityError::Invalid`] and
-//!   [`sp_runtime::transaction_validity::InvalidTransaction::Payment`] if the extrinsic cannot pay
-//!   for its declared tip.
-//! * Return `Err` with [`sp_runtime::transaction_validity::InvalidTransaction::Future`] or `Stale`
-//!   if the nonce is too high or too low.
+//! ## Checklist (TL;DR)
 //!
-//! In all other cases, outer `Result` is `Ok`.
+//! Here's a quick summary of the major action items, in the same order as specified above.
 //!
-//! * If the inner dispatch is failing, your return value should look like `Ok(Err(_))`, and we
-//!   don't care which variant of `DispatchError` you return.
-//!
-//! ### `TaggedTransactionQueue::validate_transaction`
-//!
-//! Recall that the return type of `validate_transaction` is
-//! [`sp_runtime::transaction_validity::TransactionValidity`] which is simply a `Result`. Similar to
-//! the above, your `validate_transaction` implementation must:
-//!
-//! * Return `Err` with [`sp_runtime::transaction_validity::TransactionValidityError::Invalid`] and
-//!   [`sp_runtime::transaction_validity::InvalidTransaction::BadProof`] if the extrinsic has an
-//!   invalid signature.
-//! * Return `Err` with [`sp_runtime::transaction_validity::TransactionValidityError::Invalid`] and
-//!   [`sp_runtime::transaction_validity::InvalidTransaction::Payment`] if the extrinsic cannot pay
-//!   for its declared tip.
-//! * Return `Err` with [`sp_runtime::transaction_validity::InvalidTransaction::Future`] or `Stale`
-//!   if the nonce is too high or too low.
-//!
-//! Moreover, if tip is provided (and can paid at the time), the
-//! [`sp_runtime::transaction_validity::ValidTransaction::priority`] must be set to the tip value
-//! (use a simple saturated conversion if needed).
-//!
-//! ### `Core_execute_block`
-//!
-//! The `execute_block` expects a valid block in which all transactions will get included. That is,
-//! it will expect all `ApplyExtrinsicResult` to be `Ok(_)`. Note that a failed dispatch is
-//! acceptable, like `Ok(Err(_))`.
-//!
-//! You should not need to change this API, but studying it will be fruitful.
+//! TODO: @Ank4n please re-summarize the above after a sanity read.
 //!
 //! ## Grading
 //!
@@ -245,83 +271,36 @@
 //! * we do not care about the internals of your runtime, other than the standard set of runtime
 //!   apis.
 //! * we do not care if you derive some additional trait for some type anywhere.
-//! * but we do care about your storage layout being exactly as described in `mini_substrate`.
+//! * but we do care about your storage layout being exactly as described in [`shared`].
 //! * we do care about the extrinsic format being exactly as described in [`shared`].
-//! * our tests are fairly similar to `import_and_author_equal`. We construct a block, author it,
-//!   then import it, then assert that the process was correct, and finally add a number of
-//!   assertions about the state ourselves.
+//! * our tests are fairly similar to `import_and_author_equal`. We construct a list of extrinsics,
+//!   some of which are successful and some are not. Those that were at least apply-able are put
+//!   into a block. Then, we re-import this block. Finally, we assert that authoring and importing
+//!   the block had the same side effects and roots.
 //!
 //! While we can't force you not to change [`shared`] module, we use an exact copy of this file to
-//! craft extrinsics/blocks to interact with your runtime, and we expect to find the types mentioned
-//! in there (eg. [`shared::AccountBalance`]) to be what we decode from your storage.
+//! craft extrinsics/blocks to interact with your runtime while grading, and we expect to find the
+//! types mentioned in there (eg. [`shared::AccountBalance`]) to be what we decode from your
+//! storage.
 //!
 //! That being said, you can use types that are equivalent to their encoding to the ones mentioned
 //! in [`shared`].
 //!
-//! Our tests are consisted of 5 main modules:
-//!
-//! * basics: this set of tests only check that you can properly execute the [`shared::SystemCall`]
-//!   variants.
-//! * `block_builder` and `validate_transaction` apis: these tests check the return type of these
-//!   two runtime apis, excluding the details for tipping and nonce. They will use
-//!   [`shared::SystemCall`].
-//!
-//! If you implement the above two correctly, you will be granted a score of 1.
-//!
-//! * correct implementation of the currency and staking system.
-//!
-//! If you implement the above correctly, you will be granted a score of 2.
-//!
-//! * correct implementation of the tipping and nonce system.
-//!
-//! If you implement the above correctly, you will be granted a score of 3 or more.
-//!
-//! We expect all students to pass the pillars marked above in a linear fashion. In other words, we
-//! see it unlikely for you to be able to implement the currency system correctly, without
-//! implementing the basics first. Students who don't follow this pattern will be assessed on a
-//! case-by-case basis.
-//!
-//! > Given that this is the first time that this assignment is being auto-graded, you can request a
-//! > pre-submit from your each of your teachers at most once. This is subject to availability.
+//! Rubric: TBD.
 //!
 //! ## Hints
-//!
-//! ### Block Authoring vs. Import
-//!
-//! Recall that the api call flow in block authoring is:
-//!
-//! ```ignore
-//! Core::initialize_block(raw_header);
-//! loop {
-//!     BlockBuilder::apply_extrinsic
-//! }
-//! BlockBuilder::finalize_block() -> final_header
-//! ```
-//!
-//! The client builds a raw header that has `number` and a few other fields set, but no roots yet,
-//! and passes it to the runtime in `initialize_block`. The runtime stored this raw header at this
-//! point, and intends to return its final version in `finalize_block`.
-//!
-//! When importing a block, the api call flow is:
-//!
-//! ```ignore
-//! Core::execute_block(block);
-//! ```
-//!
-//! End of the day, you must ensure that the above two code paths come to the same state root, and
-//! record it in the block header, along with the root of all extrinsics.
 //!
 //! ### Logging
 //!
 //! Logging can be enabled by setting the `RUST_LOG` environment variable, as such:
 //!
-//! ```ignore
+//! ```no_compile
 //! RUST_LOG=frameless=debug cargo run
 //! ```
 //!
 //! Or equally:
 //!
-//! ```ignore
+//! ```no_compile
 //! cargo run -- --dev -l frameless=debug
 //! ```
 //!
@@ -329,53 +308,22 @@
 //!
 //! In order to run two nodes, execute the following commands in two different terminals.
 //!
-//! ```ignore
+//! ```no_compile
 //! cargo run -- --dev --alice -l frameless=debug
-//! cargo r -- --dev --bob -l frameless=debug --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/<node-id-of-alice>
+//! cargo run -- --dev --bob -l frameless=debug --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/<node-id-of-alice>
 //! ```
 //!
 //! If you let the former `--alice` node progress for a bit, you will see that `--bob` will start
 //! syncing from alice.
 //!
-//! ### EXTRA/OPTIONAL: `SignedExtensions`
+//! ### Extra: `SignedExtensions`
 //!
-//! What we have implemented in this extra as added fields to our [`shared::RuntimeCallExt`] should
-//! have ideally been implemented as a signed extension. In a separate branch, explore this, and ask
-//! for our feedback. If make progress on this front, DO NOT submit it for grading, as our grading
-//! will work with the simpler `RuntimeCallExt` model.
+//! What we have implemented tip and nonce in this assignment as added fields to our
+//! [`shared::RuntimeCallExt`], they should have ideally been implemented as a "signed extension".
+//! In a separate branch, explore this, and ask for our feedback. If make progress on this front, DO
+//! NOT submit it for grading, as our grading will work with the simpler `RuntimeCallExt` model.
 //!
-//! ## Checklist (TL;DR)
-//!
-//! This might not be exhaustive. Feel free to check/add items here to make sure you finish all the
-//! required tasks.
-//!
-//! - [ ] (1.1) Implement basic [apply_extrinsic](`Runtime::do_apply_extrinsic()`) using
-//!   [`shared::SystemCall::Set`].
-//! - [ ] (2.1) [Finalize block](`Runtime::do_finalize_block()`) by setting correct `state_root` and
-//!   `extrinsics_root`.
-//! - [ ] (2.2) Run your chain with two or more nodes to see if the non authoring node can import a
-//!   block.
-//! - [ ] (3.1) Implement proper signature checking during
-//!   [validate_transaction](`Runtime::do_validate_transaction()`).
-//! 	Reject unsigned or bad signature extrinsics. Make sure these steps are also done at
-//! `apply_extrinsic`.
-//! - [ ] (1.2) Properly implement [apply_extrinsic](`Runtime::do_apply_extrinsic()`).
-//! - [ ] (4) Implement a currency module in your runtime with following abilities
-//! 	- [ ] Ability to mint tokens to a destination account.
-//!     - [ ] Ability to transfer some tokens from sender to destination.
-//!     - [ ] Ability to transfer all tokens from sender to destination destroying sender in
-//!       process.
-//! 		- [ ] Notion of minimum balance that user needs to maintain to keep their account in storage.
-//!     Account gets
-//! 		reaped if balance falls below minimum amount.
-//!     - [ ] Make sure Total Issuance is maintained correctly at all times.
-//! - [ ] (3.2) Prevent replay attacks by adding a nonce system for user transactions.
-//! - [ ] (3.3) Ability to add an optional tip while submitting a transaction. The tip increases the
-//!   priority of the
-//! 	transaction. This tip should be deposited to the treasury account.
-//! - [ ] (5) Add a staking system on top of the currency system you built. Provide a way to bond
-//!   tokens to the
-//! 	staking system. Bonded tokens are locked in user accounts and cannot be transferred.
+//! This is entirely optional.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -436,7 +384,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	state_version: 1,
 };
 
-/// The version information used to identify this runtime when compiled natively.
+/// The version information used to identify this runtime when compiled natively. This is almost
+/// deprecated. Ignore.
 #[cfg(feature = "std")]
 pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
@@ -472,16 +421,12 @@ impl Runtime {
 		sp_io::storage::set(key, &value.encode());
 	}
 
-	fn do_initialize_block(header: &<Block as BlockT>::Header) {
-		info!(
-			target: LOG_TARGET,
-			"Entering initialize_block. header: {:?} / version: {:?}", header, VERSION.spec_version
-		);
+	pub fn do_initialize_block(header: &<Block as BlockT>::Header) {
 		sp_io::storage::set(&HEADER_KEY, &header.encode());
 		sp_io::storage::clear(&EXTRINSICS_KEY);
 	}
 
-	fn do_finalize_block() -> <Block as BlockT>::Header {
+	pub fn do_finalize_block() -> <Block as BlockT>::Header {
 		// fetch the header that was given to us at the beginning of the block.
 		let header = Self::get_state::<<Block as BlockT>::Header>(HEADER_KEY)
 			.expect("We initialized with header, it never got mutated, qed");
@@ -497,28 +442,17 @@ impl Runtime {
 
 	/// Apply a single extrinsic.
 	///
-	/// If an internal error occurs during the dispatch, such as "insufficient funds" etc, we don't
-	/// care about which variant of `DispatchError` you return. But, if a bad signature is provided,
-	/// then `Err(InvalidTransaction::BadProof)` must be returned.
-	fn do_apply_extrinsic(ext: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
-		info!(target: LOG_TARGET, "Entering apply_extrinsic: {:?}", ext);
+	/// In our template, we call into this from both block authoring, and block import. You are free
+	/// to change this, but it is probably in your best interest to keep it as is.
+	pub fn do_apply_extrinsic(ext: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 		Self::solution_apply_extrinsic(ext.clone())
 	}
 
 	/// Your code path to execute a block that has been previously authored.
-	///
-	/// Study this carefully, but you probably don't need to change it, other than providing a
-	/// proper `do_apply_extrinsic`.
-	fn do_execute_block(block: Block) {
-		info!(
-			target: LOG_TARGET,
-			"Entering execute_block block: {:?} (exts: {})",
-			block,
-			block.extrinsics.len()
-		);
-
+	pub fn do_execute_block(block: Block) {
 		// clear any previous extrinsics. data.
-		// TODO: ask them to look into FRAME and if this is any different?
+		// NOTE: Look into FRAME, namely the system and executive crates and see if this is any
+		// different in FRAME?
 		sp_io::storage::clear(&EXTRINSICS_KEY);
 
 		for extrinsic in block.clone().extrinsics {
@@ -545,45 +479,19 @@ impl Runtime {
 		info!(target: LOG_TARGET, "Finishing block import.");
 	}
 
-	fn do_validate_transaction(
+	/// Your transaction pool validation.
+	pub fn do_validate_transaction(
 		_source: TransactionSource,
 		ext: <Block as BlockT>::Extrinsic,
 		_block_hash: <Block as BlockT>::Hash,
 	) -> TransactionValidity {
-		log::debug!(target: LOG_TARGET,"Entering validate_transaction. tx: {:?}", ext);
-
 		Self::solution_validate_transaction(_source, ext, _block_hash)
 	}
 
-	/// This is called to create your chain's genesis state. See the example below, and the
-	/// documentation of the trait to learn how you should implement it!
-	fn do_create_default_config() -> Vec<u8> {
-		let genesis = serde_json::json!({
-			"value": 42,
-		});
-		serde_json::to_string(&genesis)
-			.expect("genesis state should be convertible to json")
-			.into_bytes()
-	}
-
-	fn do_build_config(input: Vec<u8>) -> sp_genesis_builder::Result {
-		let json_genesis: serde_json::Value =
-			serde_json::from_slice(&input).expect("JSON blob invalid");
-		if let serde_json::Value::Object(genesis) = json_genesis {
-			for (key, value) in genesis {
-				log::info!(target: LOG_TARGET, "inserting {:?} -> {:?} into genesis", key, value);
-				sp_io::storage::set(
-					&key.encode(),
-					&value
-						.as_number()
-						.and_then(|n| n.as_u64())
-						.expect("only support integer numbers in genesis JSON")
-						.encode(),
-				);
-			}
-		}
-
-		Ok(())
+	/// if you want some initial state in your own local test (when you actually run the node with
+	/// `cargo run`), then add them here. We don't ever call into this API.
+	pub fn do_build_config() -> sp_genesis_builder::Result {
+		Self::solution_do_build_config()
 	}
 }
 
@@ -594,21 +502,34 @@ impl_runtime_apis! {
 		}
 
 		fn execute_block(block: Block) {
+			info!(
+				target: LOG_TARGET,
+				"Entering execute_block block: {:?} (exts: {})",
+				block,
+				block.extrinsics.len()
+			);
 			Self::do_execute_block(block)
 		}
 
 		fn initialize_block(header: &<Block as BlockT>::Header) {
+			info!(
+				target: LOG_TARGET,
+				"Entering initialize_block. header: {:?} / version: {:?}", header, VERSION.spec_version
+			);
 			Self::do_initialize_block(header)
 		}
 	}
 
 	impl sp_block_builder::BlockBuilder<Block> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
+			info!(target: LOG_TARGET, "Entering apply_extrinsic: {:?}", extrinsic);
 			Self::do_apply_extrinsic(extrinsic)
 		}
 
 		fn finalize_block() -> <Block as BlockT>::Header {
-			Self::do_finalize_block()
+			let header = Self::do_finalize_block();
+			info!(target: LOG_TARGET, "Finalized block authoring {:?}", header);
+			header
 		}
 
 		fn inherent_extrinsics(_data: sp_inherents::InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
@@ -629,21 +550,26 @@ impl_runtime_apis! {
 			tx: <Block as BlockT>::Extrinsic,
 			block_hash: <Block as BlockT>::Hash,
 		) -> TransactionValidity {
+			log::debug!(target: LOG_TARGET,"Entering validate_transaction. tx: {:?}", tx);
 			Self::do_validate_transaction(source, tx, block_hash)
 		}
 	}
 
+	// You can safely ignore everything after this.
 	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
 		fn create_default_config() -> Vec<u8> {
-			Runtime::do_create_default_config()
+			// ignore this.
+			let genesis = serde_json::json!({});
+			serde_json::to_string(&genesis)
+				.expect("genesis state should be convertible to json")
+				.into_bytes()
 		}
 
-		fn build_config(config: Vec<u8>) -> sp_genesis_builder::Result {
-			Runtime::do_build_config(config)
+		fn build_config(_config: Vec<u8>) -> sp_genesis_builder::Result {
+			Runtime::do_build_config()
 		}
 	}
 
-	// Ignore everything after this.
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
 			OpaqueMetadata::new(Default::default())
@@ -720,8 +646,8 @@ mod tests {
 			.unwrap_or_default()
 	}
 
-	/// Fund an account with the `MINIMUM_BALANCE` such that it can transact. This can be empty for
-	/// now, but once you implement the currency part, you need to use it.
+	/// Fund an account with the `EXISTENTIAL_DEPOSIT` such that it can transact. This can be empty
+	/// for now, but once you implement the currency part, you need to use it.
 	fn fund_account(who: AccountId) {
 		solution::fund_account(who)
 	}

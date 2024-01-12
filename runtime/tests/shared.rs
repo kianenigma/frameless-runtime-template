@@ -24,7 +24,7 @@ pub const SUDO: [u8; 32] =
 pub const TREASURY: [u8; 32] =
 	hex_literal::hex!["ff3593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"];
 /// Minimum account balanced.
-pub const MINIMUM_BALANCE: Balance = 10;
+pub const EXISTENTIAL_DEPOSIT: Balance = 10;
 /// The key to which [`SystemCall::Set`] will write the value.
 ///
 /// Hex: 0x76616c7565
@@ -72,7 +72,8 @@ pub enum CurrencyCall {
 	/// ### Errors
 	///
 	/// * If any type of arithmetic operation overflows.
-	/// * If the `dest`'s free balance will not be enough to pass the bar of [`MINIMUM_BALANCE`].
+	/// * If the `dest`'s free balance will not be enough to pass the bar of
+	///   [`EXISTENTIAL_DEPOSIT`].
 	/// * If the sender is not [`SUDO`].
 	Mint { dest: AccountId, amount: Balance },
 	/// Transfer `amount` to `dest`.
@@ -80,13 +81,13 @@ pub enum CurrencyCall {
 	/// The `sender` must exist in ANY CASE, but the `dest` might be created in the process.
 	///
 	/// Both `sender` and `dest` must finish the operation with equal or more free balance than
-	/// [`MINIMUM_BALANCE`].
+	/// [`EXISTENTIAL_DEPOSIT`].
 	///
 	/// ### Errors
 	///
 	/// * If any type of arithmetic operation overflows.
 	/// * If the sender does not exist.
-	/// * If either `sender` or `dest` finish without [`MINIMUM_BALANCE`] of free balance left.
+	/// * If either `sender` or `dest` finish without [`EXISTENTIAL_DEPOSIT`] of free balance left.
 	Transfer { dest: AccountId, amount: Balance },
 	/// Transfer all of sender's free balance to `dest`. This is equal to "destroying" the
 	/// sender account.
@@ -98,8 +99,8 @@ pub enum CurrencyCall {
 	/// * If any type of arithmetic operation overflows.
 	/// * If the sender has any reserve balance left.
 	///
-	/// Since the sender is a valid account, with more than [`MINIMUM_BALANCE`], the recipient
-	/// is also guaranteed to have at least [`MINIMUM_BALANCE`].
+	/// Since the sender is a valid account, with more than [`EXISTENTIAL_DEPOSIT`], the recipient
+	/// is also guaranteed to have at least [`EXISTENTIAL_DEPOSIT`].
 	TransferAll { dest: AccountId },
 }
 
@@ -150,7 +151,7 @@ pub type Block = generic::Block<Header, Extrinsic>;
 ///
 /// The free balance of an account is the subset of the account balance that can be transferred
 /// out of the account. As noted elsewhere, the free balance of ALL accounts at ALL TIMES mut be
-/// equal or more than that of [`MINIMUM_BALANCE`].
+/// equal or more than that of [`EXISTENTIAL_DEPOSIT`].
 ///
 /// Conversely, the reserved part of an account is a subset that CANNOT be transferred out,
 /// unless if explicitly unreserved.
@@ -171,9 +172,9 @@ impl AccountBalance {
 	/// Create a new instance of `Self`.
 	///
 	/// This ensures that no instance of this type is created by mistake with less than
-	/// `MINIMUM_BALANCE`.
+	/// `EXISTENTIAL_DEPOSIT`.
 	pub fn new_from_free(free: Balance) -> Self {
-		assert!(free >= MINIMUM_BALANCE, "free balance must be at least MINIMUM_BALANCE");
+		assert!(free >= EXISTENTIAL_DEPOSIT, "free balance must be at least EXISTENTIAL_DEPOSIT");
 		Self { free, ..Default::default() }
 	}
 }

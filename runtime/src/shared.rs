@@ -23,8 +23,6 @@ pub const SUDO: [u8; 32] =
 /// The treasury account to which tips should be deposited.
 pub const TREASURY: [u8; 32] =
 	hex_literal::hex!["ff3593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"];
-/// Minimum account balanced.
-pub const MINIMUM_BALANCE: Balance = 10;
 /// The key to which [`SystemCall::Set`] will write the value.
 ///
 /// Hex: 0x76616c7565
@@ -39,7 +37,8 @@ pub const SUDO_VALUE_KEY: &[u8] = b"sudo_value";
 pub const HEADER_KEY: &[u8] = b"header";
 /// Key used to store all extrinsics in a block.
 ///
-/// Should always remain at the end of the block, and be cleared at the beginning of the next block.
+/// Should always remain in state at the end of the block, and be flushed at the beginning of the
+/// next block.
 pub const EXTRINSICS_KEY: &[u8] = b"extrinsics";
 
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
@@ -47,21 +46,106 @@ pub const EXTRINSICS_KEY: &[u8] = b"extrinsics";
 pub enum SystemCall {
 	/// Do nothing.
 	///
-	/// This will only ensure that `data` is remarked as the block data.
+	/// This will only ensure that `data` is remarked as the block data, but nothing is changed in
+	/// the state (other than potential side effects related to tipping and nonce).
+	///
+	/// ## Dispatch Errors
+	///
+	/// None. Should always work.
 	Remark { data: sp_std::prelude::Vec<u8> },
-	/// Set the value under [`VALUE_KEY`] to `value`.
+	/// Set the value under [`VALUE_KEY`] to `value`. Can be dispatched by anyone.
+	///
+	/// ## Dispatch Errors
+	///
+	/// None. Should always work.
 	Set { value: u32 },
 	/// Set the value under [`SUDO_VALUE_KEY`] to `value`.
 	///
-	/// Can only be called by Alice, aka [`SUDO`].
+	/// ## Dispatch Errors
+	///
+	/// [`sp_runtime::DispatchError::BadOrigin`] if the caller is not [`SUDO`].
 	SudoSet { value: u32 },
 	/// Upgrade the runtime to the given code. In a real world situation, this should be heavily
 	/// permissioned.
 	///
-	/// This is only for you to play around with, and no graded test will use it.
+	/// This is only for you to play around with, and no test will use it.
+	///
+	/// ## Dispatch Errors
+	///
+	/// None. Should always work.
 	Upgrade { code: sp_std::prelude::Vec<u8> },
 }
 
+/// This is the amount of **FREE** (see [`AccountBalance`] balance that is needed for any account to
+/// exist. In other words, at NO POINT IN TIME an account's free balance should be less than this
+/// amount.
+pub const EXISTENTIAL_DEPOSIT: Balance = 10;
+
+/// The specification of dispatchable calls in the currency module.
+///
+/// This module is expected to maintain a total issuance. This is a single value of type [`Balance`]
+/// that should be the sum of **ALL** account balances that exists. No exceptions.
+///
+/// Refer to each variant for more information.
+///
+/// ## Storage Layout
+///
+/// * mapping [`AccountId`] to [`AccountBalance`] kept at `BalancesMap + encode(account)`.
+/// * value of type [`Balance`] for total issuance kept at `TotalIssuance`.
+///
+/// ```
+/// use sp_keyring::AccountKeyring;
+/// use parity_scale_codec::Encode;
+/// fn main() {
+///     // storage key for alice.
+///     let alice = AccountKeyring::Alice.public();
+///     let key = [b"BalancesMap".as_ref(), alice.as_ref()].concat();
+///
+///     // notice that encoding of certain types are themselves.
+///     assert_eq!(b"BalancesMap".as_ref(), b"BalancesMap".encode());
+///     assert_eq!(alice.as_ref(), alice.encode());
+/// }
+/// ```
+///
+/// ## Existential Deposit
+///
+/// > Revisit this section once you read about staking and tipping as well.
+///
+/// Accounts that are stored in storage, as per mapping explained above, should at least have 10
+/// units of "free" balance. You can think of this as an upfront deposit. In order for the runtime
+/// to consider an account "worthy" of taking up space in the state, it must at least bring 10 units
+/// of free balance to the system.
+///
+/// We define 3 states for an account:
+///
+/// * Created, exists: it means it has more than [`EXISTENTIAL_DEPOSIT`] units of FREE balance. So
+///   long as enough free balance exists, the reserved balance is irrelevant.
+/// * Destroyed: When an account has no free AND no reserved balance left, it is destroyed. This
+///   means its associated item in the balances map is REMOVED.
+/// * Invalid: Any other combination of free and reserved balance is invalid.
+///
+/// In all transactions:
+///
+/// - The sender of a transaction must exist prior to applying the transaction. The sender might
+///   finish the transaction while still existing, or destroyed.
+/// - Similarly, any other parties involved in the transaction must not finish the transaction in
+///   the invalid state.
+///
+/// ## Apply Errors
+///
+/// Knowing the above, you must add a new check to your apply conditions (such as signature check),
+/// that prior to being applied, all transactions must come from a sender with an "existing"
+/// account.
+///
+/// (This probably forces you to update your tests to pre-fund a few accounts.)
+///
+/// ## Transaction Pool Validation Errors
+///
+/// Same as Apply errors. The existence of accounts must be checked at `validate_transaction`.
+///
+/// ## Dispatch Errors
+///
+/// Explained at each variant below.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, TypeInfo, Debug, PartialEq, Eq, Clone)]
 pub enum CurrencyCall {
@@ -69,47 +153,57 @@ pub enum CurrencyCall {
 	///
 	/// If `dest` exists, its balance is increased. Else, it is created, if possible.
 	///
-	/// ### Errors
+	/// ## Dispatch Errors
 	///
-	/// * If any type of arithmetic operation overflows.
-	/// * If the `dest`'s free balance will not be enough to pass the bar of [`MINIMUM_BALANCE`].
-	/// * If the sender is not [`SUDO`].
+	/// * [`sp_runtime::DispatchError::BadOrigin`] if the sender is not [`SUDO`].
+	/// * [`sp_runtime::DispatchError::Token`] if the `dest` ends up in an invalid state with
+	///   respect to existential deposit.
+	/// * [`sp_runtime::DispatchError::Arithmetic`] if any type of arithmetic operation overflows.
 	Mint { dest: AccountId, amount: Balance },
 	/// Transfer `amount` to `dest`.
 	///
-	/// The `sender` must exist in ANY CASE, but the `dest` might be created in the process.
+	/// The `sender` must exist prior to applying the transaction, but the `dest` might be created
+	/// in the process. The sender might get destroyed as a consequence of dispatch.
 	///
-	/// Both `sender` and `dest` must finish the operation with equal or more free balance than
-	/// [`MINIMUM_BALANCE`].
+	/// ## Dispatch Errors
 	///
-	/// ### Errors
-	///
-	/// * If any type of arithmetic operation overflows.
-	/// * If the sender does not exist.
-	/// * If either `sender` or `dest` finish without [`MINIMUM_BALANCE`] of free balance left.
+	/// * [`sp_runtime::DispatchError::Token`] If either `sender` or `dest` end up in an invalid
+	///   state with respect to existential deposit.
+	/// * [`sp_runtime::DispatchError::Arithmetic`] if any type of arithmetic operation overflows.
 	Transfer { dest: AccountId, amount: Balance },
-	/// Transfer all of sender's free balance to `dest`. This is equal to "destroying" the
-	/// sender account.
-	///
-	/// If `sender` has some reserved balance, operation should not be allowed.
-	///
-	/// ### Errors
-	///
-	/// * If any type of arithmetic operation overflows.
-	/// * If the sender has any reserve balance left.
-	///
-	/// Since the sender is a valid account, with more than [`MINIMUM_BALANCE`], the recipient
-	/// is also guaranteed to have at least [`MINIMUM_BALANCE`].
+	/// Alias for `Transfer { dest, amount: sender.free }`.
 	TransferAll { dest: AccountId },
 }
 
+/// The specification of dispatchable calls in the currency module.
+///
+/// This module has no additional storage, and utilizes the existing [`AccountBalance`] stored under
+/// `BalancesMap`.
+///
+/// ## Apply Errors
+///
+/// No additional apply errors.
+///
+/// ## Transaction Pool Validation Errors
+///
+/// No additional pool validation errors.
+///
+/// ## Dispatch Errors
+///
+/// Explained at each variant below.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, TypeInfo, Debug, PartialEq, Eq, Clone)]
 pub enum StakingCall {
 	/// Bond `amount` form the sender, if they have enough free balance.
 	///
-	/// This results in `amount` being moved from their free balance to their reserved balance. See
-	/// [`AccountBalance`].
+	/// This results in `amount` being moved from their free balance to their reserved balance.
+	///
+	/// ## Dispatch Errors
+	///
+	/// * [`sp_runtime::DispatchError::BadOrigin`] if the sender does not exist.
+	/// * [`sp_runtime::DispatchError::Token`] If `sender` ends up in an invalid state with respect
+	///   to existential deposit.
+	/// * [`sp_runtime::DispatchError::Arithmetic`] if any type of arithmetic operation overflows.
 	Bond { amount: Balance },
 }
 
@@ -138,6 +232,7 @@ pub struct RuntimeCallExt {
 ///
 /// Our tests will use the given types to interact with your runtime. Note that you can use any
 /// other type on your runtime type, as long as you can convert it to/from these types.
+#[docify::export]
 pub type Extrinsic = generic::UncheckedExtrinsic<AccountId, RuntimeCallExt, Signature, ()>;
 
 /// The header type of the runtime.
@@ -150,7 +245,7 @@ pub type Block = generic::Block<Header, Extrinsic>;
 ///
 /// The free balance of an account is the subset of the account balance that can be transferred
 /// out of the account. As noted elsewhere, the free balance of ALL accounts at ALL TIMES mut be
-/// equal or more than that of [`MINIMUM_BALANCE`].
+/// equal or more than that of [`EXISTENTIAL_DEPOSIT`].
 ///
 /// Conversely, the reserved part of an account is a subset that CANNOT be transferred out,
 /// unless if explicitly unreserved.
@@ -171,9 +266,9 @@ impl AccountBalance {
 	/// Create a new instance of `Self`.
 	///
 	/// This ensures that no instance of this type is created by mistake with less than
-	/// `MINIMUM_BALANCE`.
+	/// `EXISTENTIAL_DEPOSIT`.
 	pub fn new_from_free(free: Balance) -> Self {
-		assert!(free >= MINIMUM_BALANCE, "free balance must be at least MINIMUM_BALANCE");
+		assert!(free >= EXISTENTIAL_DEPOSIT, "free balance must be at least EXISTENTIAL_DEPOSIT");
 		Self { free, ..Default::default() }
 	}
 }
