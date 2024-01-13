@@ -5,4 +5,4 @@
 > 1. `./src/solution`
 > 2. `./tests`
 
-Run `cargo doc -p runtime --open --no-deps --document-private-items`, and start hacking 🚀
+Run `cargo doc -p runtime --open --document-private-items`, and start hacking 🚀

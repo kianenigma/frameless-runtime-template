@@ -127,7 +127,7 @@ pub const EXISTENTIAL_DEPOSIT: Balance = 10;
 /// In all transactions:
 ///
 /// - The sender of a transaction must exist prior to applying the transaction. The sender might
-///   finish the transaction while still existing, or destroyed.
+///   be destroyed as a side effect of a transaction based on above conditions.
 /// - Similarly, any other parties involved in the transaction must not finish the transaction in
 ///   the invalid state.
 ///
