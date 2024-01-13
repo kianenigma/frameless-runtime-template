@@ -1,7 +1,7 @@
-use runtime::{RuntimeGenesisConfig, WASM_BINARY};
+use runtime::WASM_BINARY;
 use sc_service::{ChainType, Properties};
 
-pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig>;
+pub type ChainSpec = sc_service::GenericChainSpec<()>;
 
 fn props() -> Properties {
 	let mut properties = Properties::new();
@@ -11,18 +11,14 @@ fn props() -> Properties {
 }
 
 pub fn development_config() -> Result<ChainSpec, String> {
-	#[allow(deprecated)]
-	Ok(ChainSpec::from_genesis(
-		"Development",
-		"dev",
-		ChainType::Development,
-		move || Default::default(),
-		vec![],
+	let cs = ChainSpec::builder(
+		WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?,
 		None,
-		None,
-		None,
-		Some(props()),
-		None,
-		WASM_BINARY.expect("Development wasm not available"),
-	))
+	)
+	.with_name("Development")
+	.with_id("dev")
+	.with_properties(props())
+	.with_chain_type(ChainType::Development)
+	.build();
+	Ok(cs)
 }

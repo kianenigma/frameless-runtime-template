@@ -5,8 +5,9 @@ use self::{
 use crate::{
 	shared::{
 		AccountId, Balance, Block, CurrencyCall, Extrinsic, RuntimeCall, StakingCall, SystemCall,
-		EXTRINSICS_KEY, MINIMUM_BALANCE, SUDO, TREASURY, VALUE_KEY,
+		EXISTENTIAL_DEPOSIT, EXTRINSICS_KEY, SUDO, TREASURY, VALUE_KEY,
 	},
+	solution::currency::AccountBalance,
 	Runtime, LOG_TARGET, VERSION,
 };
 use parity_scale_codec::{Decode, Encode};
@@ -43,7 +44,7 @@ impl Get<AccountId> for Minter {
 pub struct MinimumBalance;
 impl Get<Balance> for MinimumBalance {
 	fn get() -> Balance {
-		MINIMUM_BALANCE
+		EXISTENTIAL_DEPOSIT
 	}
 }
 
@@ -78,6 +79,16 @@ impl From<StakingCall> for staking::Call<Runtime> {
 }
 
 #[allow(unused)]
+pub(crate) fn fund_account(who: AccountId) {
+	BalancesMap::<Runtime>::mutate(who, |b| match b {
+		Some(b) => assert!(b.free >= EXISTENTIAL_DEPOSIT),
+		None => {
+			*b = Some(AccountBalance::new_from_free(EXISTENTIAL_DEPOSIT));
+		},
+	})
+}
+
+#[allow(unused)]
 impl Runtime {
 	pub(crate) fn solution_apply_extrinsic(ext: Extrinsic) -> ApplyExtrinsicResult {
 		let sender = Self::inner_pre_dispatch(&ext)?;
@@ -89,8 +100,9 @@ impl Runtime {
 				Ok(())
 			},
 			RuntimeCall::System(SystemCall::Remark { data: _ }) => Ok(()),
-			RuntimeCall::System(SystemCall::SudoRemark { data: _ }) => {
+			RuntimeCall::System(SystemCall::SudoSet { value }) => {
 				if sender == AccountId::unchecked_from(SUDO) {
+					sp_io::storage::set(VALUE_KEY, &value.encode());
 					Ok(())
 				} else {
 					Err(DispatchError::BadOrigin)
@@ -101,12 +113,12 @@ impl Runtime {
 				Ok(())
 			},
 			RuntimeCall::Currency(currency_call) => {
-				let my_call: currency::Call<Runtime> = currency_call.into();
-				my_call.dispatch(sender)
+				let call: currency::Call<Runtime> = currency_call.into();
+				call.dispatch(sender)
 			},
 			RuntimeCall::Staking(staking_call) => {
-				let my_call: staking::Call<Runtime> = staking_call.into();
-				my_call.dispatch(sender)
+				let call: staking::Call<Runtime> = staking_call.into();
+				call.dispatch(sender)
 			},
 		};
 
@@ -135,6 +147,15 @@ impl Runtime {
 		header
 	}
 
+	pub(crate) fn solution_do_build_config() -> sp_genesis_builder::Result {
+		BalancesMap::<Self>::set(
+			AccountId::unchecked_from(SUDO),
+			AccountBalance::new_from_free(100),
+		);
+
+		Ok(())
+	}
+
 	fn check_signature(
 		ext: &<Block as BlockT>::Extrinsic,
 	) -> Result<AccountId, TransactionValidityError> {
@@ -157,9 +178,9 @@ impl Runtime {
 	) -> Result<(), TransactionValidityError> {
 		if let Some(tip) = ext.function.tip {
 			let allow_death = false; // The tip in itself is never capable of killing an account.
-			let mut balance =
-				currency::BalancesMap::<Self>::get(signer.clone()).unwrap_or_default();
-			balance
+			let mut sender_balance = currency::BalancesMap::<Self>::get(signer.clone())
+				.expect("have already been checked to exist; qed");
+			sender_balance
 				.withdraw(tip, allow_death)
 				.map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
 
@@ -167,14 +188,13 @@ impl Runtime {
 			// this so we can reuse it. FRAME does the same in certain places as well.
 
 			let treasury_acc = AccountId::unchecked_from(TREASURY);
-			let mut treasury =
+			let mut treasury_balance =
 				currency::BalancesMap::<Self>::get(treasury_acc.clone()).unwrap_or_default();
-			treasury
+			treasury_balance
 				.unchecked_receive(tip)
 				.map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
-			currency::BalancesMap::<Self>::set(treasury_acc, treasury);
-
-			currency::BalancesMap::<Self>::set(signer.clone(), balance);
+			currency::BalancesMap::<Self>::set(treasury_acc, treasury_balance);
+			currency::BalancesMap::<Self>::set(signer.clone(), sender_balance);
 		}
 
 		Ok(())
@@ -184,7 +204,7 @@ impl Runtime {
 		let mut treasury =
 			BalancesMap::<Self>::get(AccountId::unchecked_from(TREASURY)).unwrap_or_default();
 		log::debug!(target: LOG_TARGET, "treasury: {:?}", treasury);
-		if treasury.free < MINIMUM_BALANCE && treasury.free != 0 {
+		if treasury.free < EXISTENTIAL_DEPOSIT && treasury.free != 0 {
 			let mut issuance = TotalIssuance::<Self>::get().unwrap_or_default();
 			issuance -= treasury.free;
 			log::warn!(target: LOG_TARGET, "burning {}", treasury.free);
@@ -199,7 +219,8 @@ impl Runtime {
 		signer: AccountId,
 	) -> Result<(), TransactionValidityError> {
 		// This one, crucially, does not set the nonce, as it might need to be reverted.
-		let mut balance = currency::BalancesMap::<Self>::get(signer.clone()).unwrap_or_default();
+		let balance = currency::BalancesMap::<Self>::get(signer.clone())
+			.ok_or(TransactionValidityError::Invalid(InvalidTransaction::BadSigner))?;
 
 		match balance.nonce.cmp(&ext.function.nonce) {
 			sp_std::cmp::Ordering::Equal => {},
@@ -216,7 +237,8 @@ impl Runtime {
 		ext: &<Block as BlockT>::Extrinsic,
 		signer: AccountId,
 	) -> TransactionValidity {
-		let balance = currency::BalancesMap::<Self>::get(signer.clone()).unwrap_or_default();
+		let balance = currency::BalancesMap::<Self>::get(signer.clone())
+			.ok_or(TransactionValidityError::Invalid(InvalidTransaction::BadSigner))?;
 
 		let requires = match balance.nonce.cmp(&ext.function.nonce) {
 			sp_std::cmp::Ordering::Equal => {
@@ -244,7 +266,7 @@ impl Runtime {
 		Self::check_nonce_pre_dispatch(ext, signer)?;
 		Self::collect_tip(ext, signer)?;
 
-		let mut balance = BalancesMap::<Runtime>::get(signer).unwrap_or_default();
+		let mut balance = BalancesMap::<Self>::get(signer).unwrap_or_default();
 		balance.nonce += 1;
 		BalancesMap::<Runtime>::set(signer.clone(), balance);
 
