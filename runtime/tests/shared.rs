@@ -18,18 +18,22 @@ pub type AccountId = sp_core::sr25519::Public;
 
 /// The account id who's allowed to mint, and call `Sudo*` operations. This is the sr25519
 /// representation of `Alice` in `sp-keyring`.
+#[allow(dead_code)]
 pub const SUDO: [u8; 32] =
 	hex_literal::hex!["d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"];
 /// The treasury account to which tips should be deposited.
+#[allow(dead_code)]
 pub const TREASURY: [u8; 32] =
 	hex_literal::hex!["ff3593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"];
 /// The key to which [`SystemCall::Set`] will write the value.
 ///
 /// Hex: 0x76616c7565
+#[allow(dead_code)]
 pub const VALUE_KEY: &[u8] = b"value";
 /// The key to which [`SystemCall::SudoSet`] will write the value.
 ///
 /// Hex: 0x7375646f5f76616c7565
+#[allow(dead_code)]
 pub const SUDO_VALUE_KEY: &[u8] = b"sudo_value";
 /// Temporary key used to store the header. This should always be clear at the end of the block.
 ///

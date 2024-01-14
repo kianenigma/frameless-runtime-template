@@ -235,6 +235,23 @@
 //!
 //! The last field of [`shared::AccountBalance`] that has been thus far ignored is the nonce.
 //!
+//! You should implement a nonce system, as explained as a part of the tx-pool lecture. In short,
+//! the validation of each transaction should `require` nonce `(sender, n-1).encode()` and provide
+//! `(sender, n).encode()`. All accounts are created with nonce 0. The first valid transaction nonce
+//! is 0, which if successful, will set the account nonce to 1.
+//!
+//! ## Apply Errors
+//!
+//! [`sp_runtime::transaction_validity::InvalidTransaction::Future`] or `Stale` if the transaction's
+//! nonce is not correct.
+//!
+//! ## Transaction Pool Validation Errors
+//!
+//! [`sp_runtime::transaction_validity::InvalidTransaction::Future`] or `Stale` if the transaction's
+//! nonce is not correct.
+//!
+//! If valid, the correct `provides` and `requires` should be set.
+//!
 //! Look into [`Runtime::validate_nonce`] to understand how nonce system needs to be implemented for
 //! validating transaction. Additionally, nonce are verified and incremented as well as part of
 //! [`Runtime::apply_predispatch`].
@@ -252,11 +269,11 @@
 //! 	extrinsics. Refer [`Runtime::apply_dispatch`] and invoke it in [`Runtime::do_apply_extrinsic`].
 //! - [ ] (0.3) Once an extrinsic passes all the `predispatch checks` while apply,
 //! 	[`Runtime::note_extrinsic`] in the block.
-//! - [ ] (0.4) When all extrinsics in a block has been applied, compute extrinsic root and state root
-//!		in the `finalize_block`, and set it in the header. At this point all the provided unit tests
-//! 	should pass.
+//! - [ ] (0.4) When all extrinsics in a block has been applied, compute extrinsic root and state
+//!   root in the `finalize_block`, and set it in the header. At this point all the provided unit
+//!   tests should pass.
 //! - [ ] (1) Implement the [currency module](`shared::CurrencyCall`) in your runtime. Make sure:
-//!		- [ ] Account state is always in valid before and after dispatch (`Created` or `Destroyed`).
+//! 		- [ ] Account state is always in valid before and after dispatch (`Created` or `Destroyed`).
 //!     - [ ] Total issuance is maintained correctly at all times.
 //! - [ ] (2) Prevent replay attacks by adding a nonce system for user transactions. Refer
 //! 	[`Runtime::validate_nonce`] and [`Runtime::apply_predispatch`].
@@ -340,32 +357,24 @@ const LOG_TARGET: &'static str = "frameless";
 pub mod shared;
 mod solution;
 
+use crate::shared::{AccountId, EXTRINSICS_KEY, HEADER_KEY};
 use log::info;
+use opaque::Header;
 use parity_scale_codec::{Decode, Encode};
 use shared::Block;
-
 use sp_api::impl_runtime_apis;
+use sp_core::{hexdisplay::HexDisplay, OpaqueMetadata, H256};
 use sp_runtime::{
 	create_runtime_str,
 	generic::{self},
-	traits::{BlakeTwo256, Block as BlockT},
-	transaction_validity::{TransactionSource, TransactionValidity},
+	traits::{BlakeTwo256, Block as BlockT, Hash},
+	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
 	ApplyExtrinsicResult, DispatchError,
 };
 use sp_std::prelude::*;
-
-use sp_core::{hexdisplay::HexDisplay, OpaqueMetadata, H256};
-use sp_runtime::traits::{Hash, Verify};
-use sp_runtime::transaction_validity::{InvalidTransaction, TransactionValidityError};
-
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
-
 use sp_version::RuntimeVersion;
-
-use crate::shared::{
-	AccountId, RuntimeCall, SystemCall, EXTRINSICS_KEY, HEADER_KEY, VALUE_KEY,
-};
 
 /// Opaque types. This is what the lectures referred to as `ClientBlock`. Notice how
 /// `OpaqueExtrinsic` is merely a `Vec<u8>`.
@@ -403,8 +412,11 @@ pub fn native_version() -> NativeVersion {
 #[derive(Debug, Encode, Decode, PartialEq, Eq, Clone)]
 pub struct Runtime;
 
+// This impl block contains just some utilities that we have provided for you. You are free to use
+// or ignore them.
+#[allow(unused)]
 impl Runtime {
-	#[allow(unused)]
+	/// Print the entire state as a `trace` log.
 	fn print_state() {
 		let mut key = vec![];
 		while let Some(next) = sp_io::storage::next_key(&key) {
@@ -419,16 +431,30 @@ impl Runtime {
 		}
 	}
 
+	/// Get the state value at `key`, expected to decode into `T`.
 	fn get_state<T: Decode>(key: &[u8]) -> Option<T> {
 		sp_io::storage::get(key).and_then(|d| T::decode(&mut &*d).ok())
 	}
 
+	/// Mutate the value under `key`, expected to be of type `T` using `update`.
+	///
+	/// `update` contains `Some(T)` if a value exists under `T`, `None` otherwise
 	fn mutate_state<T: Decode + Encode + Default>(key: &[u8], update: impl FnOnce(&mut T)) {
 		let mut value = Self::get_state(key).unwrap_or_default();
 		update(&mut value);
 		sp_io::storage::set(key, &value.encode());
 	}
 
+	/// if you want some initial state in your own local test (when you actually run the node with
+	/// `cargo run`), then add them here. We don't ever call into this API.
+	pub fn do_build_config() -> sp_genesis_builder::Result {
+		Self::solution_do_build_config()
+	}
+}
+
+// This impl block contains the core runtime api implementations. It contains good starting points
+// denoted as a `FIXME`.
+impl Runtime {
 	pub fn do_initialize_block(header: &<Block as BlockT>::Header) {
 		sp_io::storage::set(&HEADER_KEY, &header.encode());
 		sp_io::storage::clear(&EXTRINSICS_KEY);
@@ -442,10 +468,12 @@ impl Runtime {
 		// and make sure to _remove_ it.
 		sp_io::storage::clear(&HEADER_KEY);
 
+		// This print is only for logging and debugging. Remove it.
 		Runtime::print_state();
-		let header = Self::solution_finalize_block(header);
 
-		header
+		// FIXME: update the header to contain to correct state and extrinsic root.
+		// Self::update_header(header)
+		Self::solution_finalize_block(header)
 	}
 
 	/// Apply a single extrinsic.
@@ -507,11 +535,16 @@ impl Runtime {
 		// Self::validate_tip(&ext, signer)?;
 		// Ok(valid)
 	}
+}
 
-	/// if you want some initial state in your own local test (when you actually run the node with
-	/// `cargo run`), then add them here. We don't ever call into this API.
-	pub fn do_build_config() -> sp_genesis_builder::Result {
-		Self::solution_do_build_config()
+// This impl block contains some "candidate" functions that you could use to implement the denoted
+// `FIXME` points above.
+#[allow(unused_variables, dead_code)]
+impl Runtime {
+	/// Receive the initial block header stored in `initialize_block`, and update its `state_root`
+	/// and `extrinsics_root`.
+	fn update_header(initial_header: Header) -> Header {
+		todo!();
 	}
 
 	/// Verify the extrinsic is properly signed and return the signing account if successful.
@@ -526,9 +559,13 @@ impl Runtime {
 		todo!()
 	}
 
-	/// Perform the predispatch checks and tasks, namely (1) check and update nonce, and (2) collect
-	/// tip from the signer account and transfer it to the treasury account. If any of these actions
-	/// fail, no changes should be made to the state and the correct error is returned.
+	/// Perform the predispatch checks and tasks, namely
+	///
+	/// * check and update nonce
+	/// * collect tip from the signer account
+	///
+	/// If any of these actions fail, no changes should be made to the state and the correct error
+	/// is returned.
 	///
 	/// ## Nonce
 	///
@@ -596,10 +633,7 @@ impl Runtime {
 		todo!()
 	}
 
-	/// Note extrinsic in the current block.
-	///
-	/// Should be noted in the state at the end of applying an extrinsic if it passes all
-	/// predispatch checks. They are flushed at the beginning of the next block.
+	/// Note an extrinsic because it has passed all the checks to make it apply-able.
 	fn note_extrinsic(ext: &<Block as BlockT>::Extrinsic) {
 		todo!()
 	}
@@ -710,7 +744,6 @@ impl_runtime_apis! {
 		}
 	}
 }
-
 #[cfg(test)]
 mod tests {
 	use super::*;
