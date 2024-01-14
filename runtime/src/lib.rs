@@ -4,7 +4,7 @@
 //!
 //! > This assignment is based on Joshy's experiment years ago to explore building a Substrate
 //! > runtime using pure Rust. If you learn something new in this exercise, attribute it to his
-//! > work. We hope you to also explore new possibilities, and share it with other for education.
+//! > work. We hope you to also explore new possibilities with this assignment.
 //!
 //! > This assignment resembles the `mini_substrate` section of the pre-course material. It is
 //! > recommended to re-familiarize yourself with that if you have done it. Nonetheless, everything
@@ -208,21 +208,22 @@
 //! > For example, an account that has 20 tokens cannot transfer 5 and tip 15, but it can transfer
 //! > 15 and tip 5.
 //!
-//! All tips are transferred to [`TREASURY`], as if [`TREASURY`] was an account's public key. That
-//! is, the account is stored under "BalancesMap", and uses the same [`AccountBalance`], but it can
-//! only ever have `free` balance.
+//! All tips are transferred to [`shared::TREASURY`], as if [`shared::TREASURY`] was an account's
+//! public key. That is, the account is stored under "BalancesMap", and uses the same
+//! `AccountBalance`, but it can only ever have `free` balance.
 //!
-//! The only exception of account existence is about [`TREASURY`]. If this account is non-existent,
-//! it can receive tips that are smaller than [`EXISTENTIAL_DEPOSIT`]. If by the end of the dispatch
-//! the [`TREASURY`] still has less than [`EXISTENTIAL_DEPOSIT`], this amount should be burnt.
-//! Burning is the opposite of minting, and should update the total issuance as well.
+//! The only exception of account existence is about [`shared::TREASURY`]. If this account is
+//! non-existent, it can receive tips that are smaller than `EXISTENTIAL_DEPOSIT`. If by the end of
+//! the dispatch the [`shared::TREASURY`] still has less than `EXISTENTIAL_DEPOSIT`, this amount
+//! should be burnt. Burning is the opposite of minting, and should update the total issuance as
+//! well.
 //!
-//! ## Apply Errors
+//! #### Apply Errors
 //!
 //! [`sp_runtime::transaction_validity::InvalidTransaction::Payment`] if the extrinsic cannot pay
 //! for its declared tip.
 //!
-//! ## Transaction Pool Validation Errors
+//! #### Transaction Pool Validation Errors
 //!
 //! [`sp_runtime::transaction_validity::InvalidTransaction::Payment`] if the extrinsic cannot pay
 //! for its declared tip.
@@ -232,7 +233,7 @@
 //!
 //! ### Nonce
 //!
-//! The last filed of [`shared::AccountBalance`] that has been thus far ignored is the nonce.
+//! The last field of [`shared::AccountBalance`] that has been thus far ignored is the nonce.
 //!
 //! You should implement a nonce system, as explained as a part of the tx-pool lecture. In short,
 //! the validation of each transaction should `require` nonce `(sender, n-1).encode()` and provide
@@ -251,6 +252,10 @@
 //!
 //! If valid, the correct `provides` and `requires` should be set.
 //!
+//! Look into [`Runtime::validate_nonce`] to understand how nonce system needs to be implemented for
+//! validating transaction. Additionally, nonce are verified and incremented as well as part of
+//! [`Runtime::apply_predispatch`].
+//!
 //! > Note that unlike signature check, account existence and tipping, the behavior of
 //! > `apply_extrinsic` and `validate_transaction` is noticeably different with respect to nonce.
 //!
@@ -258,7 +263,24 @@
 //!
 //! Here's a quick summary of the major action items, in the same order as specified above.
 //!
-//! TODO: @Ank4n please re-summarize the above after a sanity read.
+//! - [ ] (0.1) Implement signature verification in [`Runtime::do_apply_extrinsic`]. Refer
+//! 	[`Runtime::verify_signed`].
+//! - [ ] (0.2) Implement your first set of dispatchables in [`shared::SystemCall`] while applying
+//! 	extrinsics. Refer [`Runtime::apply_dispatch`] and invoke it in [`Runtime::do_apply_extrinsic`].
+//! - [ ] (0.3) Once an extrinsic passes all the `predispatch checks` while apply,
+//! 	[`Runtime::note_extrinsic`] in the block.
+//! - [ ] (0.4) When all extrinsics in a block has been applied, compute extrinsic root and state
+//!   root in the `finalize_block`, and set it in the header. At this point all the provided unit
+//!   tests should pass. See [`Runtime::update_header`].
+//! - [ ] (1) Implement the [currency module](`shared::CurrencyCall`) in your runtime. Make sure:
+//! 		- [ ] Account state is always in valid before and after dispatch (`Created` or `Destroyed`).
+//!     - [ ] Total issuance is maintained correctly at all times.
+//! - [ ] (2) Prevent replay attacks by adding a nonce system for user transactions. Refer
+//! 	[`Runtime::validate_nonce`] and [`Runtime::apply_predispatch`].
+//! - [ ] (3) Ability to add an optional tip while submitting a transaction. Refer
+//! 	[`Runtime::validate_tip`] and [`Runtime::apply_predispatch`].
+//! - [ ] (4) Build a [staking system](`shared::StakingCall`) on top of the currency module.
+//!
 //!
 //! ## Grading
 //!
@@ -335,29 +357,24 @@ const LOG_TARGET: &'static str = "frameless";
 pub mod shared;
 mod solution;
 
+use crate::shared::{AccountId, EXTRINSICS_KEY, HEADER_KEY};
 use log::info;
+use opaque::Header;
 use parity_scale_codec::{Decode, Encode};
 use shared::Block;
-
 use sp_api::impl_runtime_apis;
+use sp_core::{hexdisplay::HexDisplay, OpaqueMetadata, H256};
 use sp_runtime::{
 	create_runtime_str,
 	generic::{self},
-	traits::{BlakeTwo256, Block as BlockT},
-	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult,
+	traits::{BlakeTwo256, Block as BlockT, Hash},
+	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
+	ApplyExtrinsicResult, DispatchError,
 };
 use sp_std::prelude::*;
-
-use sp_core::{hexdisplay::HexDisplay, OpaqueMetadata, H256};
-use sp_runtime::traits::Hash;
-
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
-
 use sp_version::RuntimeVersion;
-
-use crate::shared::{EXTRINSICS_KEY, HEADER_KEY};
 
 /// Opaque types. This is what the lectures referred to as `ClientBlock`. Notice how
 /// `OpaqueExtrinsic` is merely a `Vec<u8>`.
@@ -395,8 +412,11 @@ pub fn native_version() -> NativeVersion {
 #[derive(Debug, Encode, Decode, PartialEq, Eq, Clone)]
 pub struct Runtime;
 
+// This impl block contains just some utilities that we have provided for you. You are free to use
+// or ignore them.
+#[allow(unused)]
 impl Runtime {
-	#[allow(unused)]
+	/// Print the entire state as a `trace` log.
 	fn print_state() {
 		let mut key = vec![];
 		while let Some(next) = sp_io::storage::next_key(&key) {
@@ -411,16 +431,30 @@ impl Runtime {
 		}
 	}
 
+	/// Get the state value at `key`, expected to decode into `T`.
 	fn get_state<T: Decode>(key: &[u8]) -> Option<T> {
 		sp_io::storage::get(key).and_then(|d| T::decode(&mut &*d).ok())
 	}
 
+	/// Mutate the value under `key`, expected to be of type `T` using `update`.
+	///
+	/// `update` contains `Some(T)` if a value exists under `T`, `None` otherwise
 	fn mutate_state<T: Decode + Encode + Default>(key: &[u8], update: impl FnOnce(&mut T)) {
 		let mut value = Self::get_state(key).unwrap_or_default();
 		update(&mut value);
 		sp_io::storage::set(key, &value.encode());
 	}
 
+	/// if you want some initial state in your own local test (when you actually run the node with
+	/// `cargo run`), then add them here. We don't ever call into this API.
+	pub fn do_build_config() -> sp_genesis_builder::Result {
+		Self::solution_do_build_config()
+	}
+}
+
+// This impl block contains the core runtime api implementations. It contains good starting points
+// denoted as a `FIXME`.
+impl Runtime {
 	pub fn do_initialize_block(header: &<Block as BlockT>::Header) {
 		sp_io::storage::set(&HEADER_KEY, &header.encode());
 		sp_io::storage::clear(&EXTRINSICS_KEY);
@@ -434,18 +468,26 @@ impl Runtime {
 		// and make sure to _remove_ it.
 		sp_io::storage::clear(&HEADER_KEY);
 
+		// This print is only for logging and debugging. Remove it.
 		Runtime::print_state();
-		let header = Self::solution_finalize_block(header);
 
-		header
+		// FIXME: update the header to contain to correct state and extrinsic root.
+		// Self::update_header(header)
+		Self::solution_finalize_block(header)
 	}
 
 	/// Apply a single extrinsic.
 	///
-	/// In our template, we call into this from both block authoring, and block import. You are free
-	/// to change this, but it is probably in your best interest to keep it as is.
+	/// In our template, we call into this from both block authoring, and block import.
 	pub fn do_apply_extrinsic(ext: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 		Self::solution_apply_extrinsic(ext.clone())
+
+		// FIXME: Following can be left or removed from the assignment as we wish.
+		// let signer = Self::verify_signed(ext.clone())?;
+		// Self::apply_predispatch(&ext, signer)?;
+		// let dispatch_outcome = Self::apply_dispatch(&ext, signer);
+		// Self::note_extrinsic(&ext);
+		// Ok(dispatch_outcome)
 	}
 
 	/// Your code path to execute a block that has been previously authored.
@@ -486,12 +528,114 @@ impl Runtime {
 		_block_hash: <Block as BlockT>::Hash,
 	) -> TransactionValidity {
 		Self::solution_validate_transaction(_source, ext, _block_hash)
+
+		// FIXME: Following can be left or removed from the assignment as we wish.
+		// let signer = Self::verify_signed(ext.clone())?;
+		// let valid = Self::validate_nonce(&ext, signer)?;
+		// Self::validate_tip(&ext, signer)?;
+		// Ok(valid)
+	}
+}
+
+// This impl block contains some "candidate" functions that you could use to implement the denoted
+// `FIXME` points above.
+#[allow(unused_variables, dead_code)]
+impl Runtime {
+	/// Receive the initial block header stored in `initialize_block`, and update its `state_root`
+	/// and `extrinsics_root`.
+	fn update_header(initial_header: Header) -> Header {
+		todo!();
 	}
 
-	/// if you want some initial state in your own local test (when you actually run the node with
-	/// `cargo run`), then add them here. We don't ever call into this API.
-	pub fn do_build_config() -> sp_genesis_builder::Result {
-		Self::solution_do_build_config()
+	/// Verify the extrinsic is properly signed and return the signing account if successful.
+	///
+	/// #### Errors
+	///
+	/// If no `extrinsic.signature` is present or if signature is not valid, return the error
+	/// [`InvalidTransaction::BadProof`].
+	fn verify_signed(
+		extrinsic: <Block as BlockT>::Extrinsic,
+	) -> Result<AccountId, TransactionValidityError> {
+		todo!()
+	}
+
+	/// Perform the predispatch checks and tasks, namely
+	///
+	/// * check and update nonce
+	/// * collect tip from the signer account
+	///
+	/// If any of these actions fail, no changes should be made to the state and the correct error
+	/// is returned.
+	///
+	/// ## Nonce
+	///
+	/// You need to check nonce supplied in the extrinsic against the nonce stored in the signer's
+	/// account.
+	///
+	/// #### Errors
+	///
+	/// [`Future`](`sp_runtime::transaction_validity::InvalidTransaction::Future`) or
+	/// [`Stale`](sp_runtime::transaction_validity::InvalidTransaction::Stale) if the transaction's
+	/// nonce is not correct.
+	///
+	/// ## Collect Tip
+	///
+	/// Collect tip if [`shared::RuntimeCallExt::tip`] is `Some(_)`. The tip is transferred to
+	/// treasury.
+	///
+	/// IMPORTANT: If paying the tip causes the signer's account existence to change (read more
+	/// about this in `ExistentialDeposit` section of [`shared::CurrencyCall`]), the predispatch
+	/// should fail and revert any changes it made (such as incrementing the Nonce).
+	///
+	/// #### Errors
+	///
+	/// [`sp_runtime::transaction_validity::InvalidTransaction::Payment`] if the extrinsic cannot
+	/// pay for its declared tip.
+	fn apply_predispatch(
+		extrinsic: &<Block as BlockT>::Extrinsic,
+		signer: AccountId,
+	) -> Result<(), TransactionValidityError> {
+		todo!()
+	}
+
+	/// Look at the `UncheckedExtrinsic.function.call` and dispatch it to the corresponding
+	/// variant of [`shared::RuntimeCall`].
+	fn apply_dispatch(
+		extrinsic: &<Block as BlockT>::Extrinsic,
+		signer: AccountId,
+	) -> Result<(), DispatchError> {
+		todo!()
+	}
+
+	/// ## Nonce validation
+	///
+	/// You should implement a nonce system, as explained as a part of the tx-pool lecture. In
+	/// short, the validation of each transaction should `require` nonce `(sender, n-1).encode()`
+	/// and provide `(sender, n).encode()`. All accounts are created with nonce 0. The first valid
+	/// transaction nonce is 0, which if successful, will set the account nonce to 1.
+	///
+	/// #### Errors
+	///
+	/// [`sp_runtime::transaction_validity::InvalidTransaction::Future`] or `Stale` if the
+	/// transaction's nonce is not correct.
+	///
+	/// If valid, the correct `provides` and `requires` should be set.
+	fn validate_nonce(
+		ext: &<Block as BlockT>::Extrinsic,
+		signer: AccountId,
+	) -> TransactionValidity {
+		todo!()
+	}
+
+	/// Verify that the sender is able to pay the tip without their accounts ending up `Destroyed`
+	/// or in `Invalid` state.
+	fn validate_tip(ext: &<Block as BlockT>::Extrinsic, signer: AccountId) -> TransactionValidity {
+		todo!()
+	}
+
+	/// Note an extrinsic because it has passed all the checks to make it apply-able.
+	fn note_extrinsic(ext: &<Block as BlockT>::Extrinsic) {
+		todo!()
 	}
 }
 
@@ -600,7 +744,6 @@ impl_runtime_apis! {
 		}
 	}
 }
-
 #[cfg(test)]
 mod tests {
 	use super::*;
