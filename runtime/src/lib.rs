@@ -271,7 +271,7 @@
 //! 	[`Runtime::note_extrinsic`] in the block.
 //! - [ ] (0.4) When all extrinsics in a block has been applied, compute extrinsic root and state
 //!   root in the `finalize_block`, and set it in the header. At this point all the provided unit
-//!   tests should pass.
+//!   tests should pass. See [`Runtime::update_header`].
 //! - [ ] (1) Implement the [currency module](`shared::CurrencyCall`) in your runtime. Make sure:
 //! 		- [ ] Account state is always in valid before and after dispatch (`Created` or `Destroyed`).
 //!     - [ ] Total issuance is maintained correctly at all times.
