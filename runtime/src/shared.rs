@@ -126,8 +126,8 @@ pub const EXISTENTIAL_DEPOSIT: Balance = 10;
 ///
 /// In all transactions:
 ///
-/// - The sender of a transaction must exist prior to applying the transaction. The sender might
-///   be destroyed as a side effect of a transaction based on above conditions.
+/// - The sender of a transaction must exist prior to applying the transaction. The sender might be
+///   destroyed as a side effect of a transaction based on above conditions.
 /// - Similarly, any other parties involved in the transaction must not finish the transaction in
 ///   the invalid state.
 ///
@@ -226,6 +226,13 @@ pub struct RuntimeCallExt {
 	pub nonce: u32,
 	/// Optional tip.
 	pub tip: Option<Balance>,
+}
+
+#[cfg(test)]
+impl RuntimeCallExt {
+	pub fn new_from_call(call: RuntimeCall) -> Self {
+		Self { call, nonce: 0, tip: None }
+	}
 }
 
 /// Final extrinsic type of the runtime.

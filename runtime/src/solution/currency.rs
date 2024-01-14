@@ -5,9 +5,10 @@ use super::{
 use crate::shared::*;
 use parity_scale_codec::{Decode, Encode};
 use scale_info::TypeInfo;
+use sp_core::crypto::UncheckedFrom;
 use sp_runtime::{
 	traits::{CheckedAdd, CheckedSub, Zero},
-	DispatchOutcome,
+	DispatchError, DispatchOutcome,
 };
 use sp_std::prelude::*;
 
@@ -64,7 +65,6 @@ pub enum Call<T: Config> {
 
 pub enum Error<T: Config> {
 	DoesNotExist,
-	NotAllowed,
 	InsufficientFunds,
 	Overflow,
 	#[allow(non_camel_case_types)]
@@ -75,7 +75,6 @@ impl<T: Config> sp_std::fmt::Debug for Error<T> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		match self {
 			Error::DoesNotExist => write!(f, "DoesNotExist"),
-			Error::NotAllowed => write!(f, "NotAllowed"),
 			Error::InsufficientFunds => write!(f, "InsufficientFunds"),
 			Error::Overflow => write!(f, "Overflow"),
 			Error::__marker(_) => unreachable!("__marker should never be printed"),
@@ -84,8 +83,13 @@ impl<T: Config> sp_std::fmt::Debug for Error<T> {
 }
 
 impl<T: Config> From<Error<T>> for sp_runtime::DispatchError {
-	fn from(_: Error<T>) -> Self {
-		Self::Other("SomeOtherErrorWeDontCareAbout")
+	fn from(e: Error<T>) -> Self {
+		match e {
+			Error::DoesNotExist => DispatchError::BadOrigin,
+			Error::InsufficientFunds => DispatchError::Token(sp_runtime::TokenError::Unsupported),
+			Error::Overflow => DispatchError::Arithmetic(sp_runtime::ArithmeticError::Overflow),
+			Error::__marker(_) => unreachable!(),
+		}
 	}
 }
 
@@ -163,21 +167,21 @@ impl<T: Config> AccountBalance<T> {
 		}
 	}
 
-	pub(crate) fn can_receive(&self, amount: T::Balance) -> DispatchOutcome {
+	pub(crate) fn can_receive(&self, amount: T::Balance, relax_ed: bool) -> DispatchOutcome {
 		self.free
 			.checked_add(&amount)
 			.ok_or(Error::<T>::Overflow)
 			.and_then(|n| {
-				(n >= T::MinimumBalance::get())
+				(n >= T::MinimumBalance::get() || relax_ed)
 					.then_some(())
 					.ok_or(Error::<T>::InsufficientFunds)
 			})
 			.map_err(Into::into)
 	}
 
-	pub(crate) fn receive(&mut self, amount: T::Balance) -> DispatchOutcome {
+	pub(crate) fn receive(&mut self, amount: T::Balance, relax_ed: bool) -> DispatchOutcome {
 		self.free = self.free.checked_add(&amount).ok_or(Error::<T>::Overflow)?;
-		if self.free < T::MinimumBalance::get() {
+		if self.free < T::MinimumBalance::get() && !relax_ed {
 			Err(Error::<T>::InsufficientFunds)?
 		}
 		Ok(())
@@ -220,10 +224,12 @@ impl<T: Config> Module<T> {
 		let mut dest_balance = BalancesMap::<T>::get(dest).unwrap_or_default();
 
 		sender_balance.can_withdraw(amount, allow_zero)?;
-		dest_balance.can_receive(amount)?;
+		dest_balance.can_receive(amount, dest == AccountId::unchecked_from(TREASURY))?;
 
 		sender_balance.withdraw(amount, allow_zero).expect("checked above");
-		dest_balance.receive(amount).expect("checked above");
+		dest_balance
+			.receive(amount, dest == AccountId::unchecked_from(TREASURY))
+			.expect("checked above");
 
 		if sender_balance.free.is_zero() && sender_balance.reserved.is_zero() {
 			BalancesMap::<T>::clear(sender);
@@ -237,7 +243,7 @@ impl<T: Config> Module<T> {
 	fn transfer_all(sender: AccountId, dest: AccountId) -> DispatchOutcome {
 		let balance = BalancesMap::<T>::get(sender).ok_or(Error::<T>::DoesNotExist)?;
 		if !balance.reserved.is_zero() {
-			Err(Error::<T>::NotAllowed)?;
+			Err(DispatchError::Token(sp_runtime::TokenError::BelowMinimum))?;
 		}
 		let amount = balance.free;
 		Self::transfer(sender, dest, amount, true)
@@ -245,14 +251,14 @@ impl<T: Config> Module<T> {
 
 	fn mint(sender: AccountId, who: AccountId, amount: T::Balance) -> DispatchOutcome {
 		if sender != T::Minter::get() {
-			Err(Error::<T>::NotAllowed)?;
+			return Err(DispatchError::BadOrigin);
 		}
 
 		let mut balance = BalancesMap::<T>::get(who).unwrap_or_default();
 		let issuance = TotalIssuance::<T>::get().unwrap_or_else(Zero::zero);
 
 		let issuance = issuance.checked_add(&amount).ok_or(Error::<T>::Overflow)?;
-		balance.receive(amount)?;
+		balance.receive(amount, who == AccountId::unchecked_from(TREASURY))?;
 
 		BalancesMap::<T>::set(who, balance);
 		TotalIssuance::<T>::set(issuance);
@@ -305,7 +311,7 @@ impl<T: Config> Dispatchable for Call<T> {
 	fn dispatch(self, sender: AccountId) -> DispatchOutcome {
 		match self {
 			Call::Mint { dest, amount } => Module::<T>::mint(sender, dest, amount),
-			Call::Transfer { dest, amount } => Module::<T>::transfer(sender, dest, amount, false),
+			Call::Transfer { dest, amount } => Module::<T>::transfer(sender, dest, amount, true),
 			Call::TransferAll { dest } => Module::<T>::transfer_all(sender, dest),
 		}
 	}

@@ -79,13 +79,18 @@ impl From<StakingCall> for staking::Call<Runtime> {
 }
 
 #[allow(unused)]
-pub(crate) fn fund_account(who: AccountId) {
-	BalancesMap::<Runtime>::mutate(who, |b| match b {
-		Some(b) => assert!(b.free >= EXISTENTIAL_DEPOSIT),
-		None => {
-			*b = Some(AccountBalance::new_from_free(EXISTENTIAL_DEPOSIT));
-		},
-	})
+pub(crate) fn create_account(who: AccountId) {
+	set_free_balance(who, EXISTENTIAL_DEPOSIT)
+}
+
+#[allow(unused)]
+pub(crate) fn set_free_balance(who: AccountId, amount: Balance) {
+	BalancesMap::<Runtime>::mutate(who, |b| *b = Some(AccountBalance::new_from_free(amount)))
+}
+
+#[allow(unused)]
+pub(crate) fn get_free_balance(who: AccountId) -> Option<Balance> {
+	BalancesMap::<Runtime>::get(who).map(|b| b.free)
 }
 
 #[allow(unused)]
