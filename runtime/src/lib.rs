@@ -255,9 +255,9 @@
 //! - [ ] (0.4) When all extrinsics in a block has been applied, compute extrinsic root and state root
 //!		in the `finalize_block`, and set it in the header. At this point all the provided unit tests
 //! 	should pass.
-//! - [ ] (1) Implement the [currency module](`shared::CurrencyCall`) in your runtime.
-//!		- [ ] Make sure account state is always valid (`Created` or `Destroyed`).
-//!     - [ ] Make sure total issuance is maintained correctly at all times.
+//! - [ ] (1) Implement the [currency module](`shared::CurrencyCall`) in your runtime. Make sure:
+//!		- [ ] Account state is always in valid before and after dispatch (`Created` or `Destroyed`).
+//!     - [ ] Total issuance is maintained correctly at all times.
 //! - [ ] (2) Prevent replay attacks by adding a nonce system for user transactions. Refer
 //! 	[`Runtime::validate_nonce`] and [`Runtime::apply_predispatch`].
 //! - [ ] (3) Ability to add an optional tip while submitting a transaction. Refer
@@ -452,13 +452,14 @@ impl Runtime {
 	///
 	/// In our template, we call into this from both block authoring, and block import.
 	pub fn do_apply_extrinsic(ext: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
-		// Self::solution_apply_extrinsic(ext.clone())
+		Self::solution_apply_extrinsic(ext.clone())
 
-		let signer = Self::verify_signed(ext.clone())?;
-		Self::apply_predispatch(&ext, signer)?;
-		let dispatch_outcome = Self::apply_dispatch(&ext, signer);
-		Self::note_extrinsic(&ext);
-		Ok(dispatch_outcome)
+		// FIXME: Following can be left or removed from the assignment as we wish.
+		// let signer = Self::verify_signed(ext.clone())?;
+		// Self::apply_predispatch(&ext, signer)?;
+		// let dispatch_outcome = Self::apply_dispatch(&ext, signer);
+		// Self::note_extrinsic(&ext);
+		// Ok(dispatch_outcome)
 	}
 
 	/// Your code path to execute a block that has been previously authored.
@@ -498,12 +499,13 @@ impl Runtime {
 		ext: <Block as BlockT>::Extrinsic,
 		_block_hash: <Block as BlockT>::Hash,
 	) -> TransactionValidity {
-		let signer = Self::verify_signed(ext.clone())?;
-		let valid = Self::validate_nonce(&ext, signer)?;
-		Self::validate_tip(&ext, signer)?;
+		Self::solution_validate_transaction(_source, ext, _block_hash)
 
-		Ok(valid)
-		// Self::solution_validate_transaction(_source, ext, _block_hash)
+		// FIXME: Following can be left or removed from the assignment as we wish.
+		// let signer = Self::verify_signed(ext.clone())?;
+		// let valid = Self::validate_nonce(&ext, signer)?;
+		// Self::validate_tip(&ext, signer)?;
+		// Ok(valid)
 	}
 
 	/// if you want some initial state in your own local test (when you actually run the node with
@@ -521,17 +523,7 @@ impl Runtime {
 	fn verify_signed(
 		extrinsic: <Block as BlockT>::Extrinsic,
 	) -> Result<AccountId, TransactionValidityError> {
-		// todo!()
-
-		if let Some((address, signature, _)) = &extrinsic.signature {
-			let payload = (extrinsic.function.clone(), ()).encode();
-			return signature
-				.verify(payload.as_ref(), address)
-				.then(|| address.clone())
-				.ok_or(TransactionValidityError::Invalid(InvalidTransaction::BadProof));
-		}
-
-		Err(TransactionValidityError::Invalid(InvalidTransaction::BadProof))
+		todo!()
 	}
 
 	/// Perform the predispatch checks and tasks, namely (1) check and update nonce, and (2) collect
@@ -569,19 +561,13 @@ impl Runtime {
 		todo!()
 	}
 
-	/// TODO: Look at the `UncheckedExtrinsic.function.call` and dispatch it to the corresponding
+	/// Look at the `UncheckedExtrinsic.function.call` and dispatch it to the corresponding
 	/// variant of [`shared::RuntimeCall`].
 	fn apply_dispatch(
 		extrinsic: &<Block as BlockT>::Extrinsic,
 		signer: AccountId,
 	) -> Result<(), DispatchError> {
-		match extrinsic.clone().function.call {
-			RuntimeCall::System(SystemCall::Set { value }) => {
-				sp_io::storage::set(VALUE_KEY, &value.encode());
-				Ok(())
-			},
-			_ => Err(DispatchError::Unavailable),
-		}
+		todo!()
 	}
 
 	/// ## Nonce validation
@@ -615,9 +601,7 @@ impl Runtime {
 	/// Should be noted in the state at the end of applying an extrinsic if it passes all
 	/// predispatch checks. They are flushed at the beginning of the next block.
 	fn note_extrinsic(ext: &<Block as BlockT>::Extrinsic) {
-		Self::mutate_state::<Vec<Vec<u8>>>(EXTRINSICS_KEY, |current| {
-			current.push(ext.encode());
-		});
+		todo!()
 	}
 }
 
