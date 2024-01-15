@@ -208,7 +208,7 @@
 //! * `apply_extrinsic`
 //! * `validate_transaction`
 //!
-//! **Paying the tip must not cause the account's existence to change. Specifically, an account
+//! **Paying the tip must not cause an account's existence to change. Specifically, an account
 //! cannot be destroyed due to the tip**. This is because tip payment happens prior to dispatch, and
 //! the dispatch logic of the runtime assumes all accounts start at an "existing" state.
 //!
@@ -242,10 +242,15 @@
 //!
 //! The last field of [`shared::AccountBalance`] that has been thus far ignored is the nonce.
 //!
-//! You should implement a nonce system, as explained as a part of the tx-pool lecture. In short,
-//! the validation of each transaction should `require` nonce `(sender, n-1).encode()` and provide
-//! `(sender, n).encode()`. All accounts are created with nonce 0. The first valid transaction nonce
-//! is 0, which if successful, will set the account nonce to 1.
+//! You should implement a nonce system, using the `provides` and `requires` fields explained in the
+//! tx-pool lecture. In short, when applying a transaction, it should `require` nonce `(sender,
+//! n-1).encode()` and provide `(sender, n).encode()`. Validation follows a somewhat similar,
+//! pattern. Note how we prefix the nonce with the account-ids to cluster nonces per accounts.
+//!
+//! All accounts are created with nonce 0. An account that is created and then destroyed and then
+//! re-created is no exception. The first valid transaction after an account created must have nonce
+//! 0, which if successful, will set the account nonce to 1. Next valid transaction has nonce 1 and
+//! so on.
 //!
 //! ## Apply Errors
 //!
@@ -271,22 +276,23 @@
 //! Here's a quick summary of the major action items, in the same order as specified above.
 //!
 //! - [ ] (0.1) Implement signature verification in [`Runtime::do_apply_extrinsic`]. Refer
-//! 	[`Runtime::verify_signed`].
+//!   [`Runtime::verify_signed`].
 //! - [ ] (0.2) Implement your first set of dispatchables in [`shared::SystemCall`] while applying
-//! 	extrinsics. Refer [`Runtime::apply_dispatch`] and invoke it in [`Runtime::do_apply_extrinsic`].
+//!   extrinsics. Refer [`Runtime::apply_dispatch`] and invoke it in
+//!   [`Runtime::do_apply_extrinsic`].
 //! - [ ] (0.3) Once an extrinsic passes all the `predispatch checks` while apply,
-//! 	[`Runtime::note_extrinsic`] in the block.
+//!   [`Runtime::note_extrinsic`] in the block.
 //! - [ ] (0.4) When all extrinsics in a block has been applied, compute extrinsic root and state
 //!   root in the `finalize_block`, and set it in the header. At this point all the provided unit
 //!   tests should pass. See [`Runtime::update_header`].
-//! - [ ] (1) Implement the [currency module](`shared::CurrencyCall`) in your runtime. Make sure:
-//! 		- [ ] Account state is always in valid before and after dispatch (`Created` or `Destroyed`).
+//! - [ ] (1) Implement the [currency module](`shared::CurrencyCall`) in your runtime. Make sure: -
+//!   [ ] Account state is always in valid before and after dispatch (`Created` or `Destroyed`).
 //!     - [ ] Total issuance is maintained correctly at all times.
 //! - [ ] (2) Build a [staking system](`shared::StakingCall`) on top of the currency module.
 //! - [ ] (3) Ability to add an optional tip while submitting a transaction. Refer
-//! 	[`Runtime::validate_tip`] and [`Runtime::apply_predispatch`].
+//!   [`Runtime::validate_tip`] and [`Runtime::apply_predispatch`].
 //! - [ ] (4) Prevent replay attacks by adding a nonce system for user transactions. Refer
-//! 	[`Runtime::validate_nonce`] and [`Runtime::apply_predispatch`].
+//!   [`Runtime::validate_nonce`] and [`Runtime::apply_predispatch`].
 //!
 //! ## Grading
 //!
@@ -314,7 +320,18 @@
 //! That being said, you can use types that are equivalent to their encoding to the ones mentioned
 //! in [`shared`].
 //!
-//! Rubric: TBD.
+//! Rubric:
+//!
+//! The assignment is broadly composed of the following 4 parts, each of which is worth 1 point.
+//!
+//! * Basics: 1 point
+//! * Currency: 1 point
+//! * Staking and Tipping: 1 point
+//! * Nonce: 1 point
+//!
+//! You should of course focus on getting the provided unit tests to pass. The final grade will be
+//! calculated over a much more extensive suite of tests. You will be given a few trial submissions
+//! prior to the final submission. More on this will be announced in the lectures.
 //!
 //! ## Hints
 //!
@@ -454,7 +471,7 @@ impl Runtime {
 	/// if you want some initial state in your own local test (when you actually run the node with
 	/// `cargo run`), then add them here. We don't ever call into this API.
 	pub fn do_build_config() -> sp_genesis_builder::Result {
-		Self::solution_do_build_config()
+		Ok(())
 	}
 }
 

@@ -111,18 +111,19 @@ pub const EXISTENTIAL_DEPOSIT: Balance = 10;
 ///
 /// > Revisit this section once you read about staking and tipping as well.
 ///
-/// Accounts that are stored in storage, as per mapping explained above, should at least have 10
-/// units of "free" balance. You can think of this as an upfront deposit. In order for the runtime
-/// to consider an account "worthy" of taking up space in the state, it must at least bring 10 units
-/// of free balance to the system.
+/// Accounts that are stored in storage, as per mapping explained above, should at least have
+/// [`EXISTENTIAL_DEPOSIT`] (10) units of "free" balance. You can think of this as an upfront
+/// deposit. In order for the runtime to consider an account "worthy" of taking up space in the
+/// state, it must at least bring 10 units of free balance to the system.
 ///
 /// We define 3 states for an account:
 ///
-/// * Created, exists: it means it has more than [`EXISTENTIAL_DEPOSIT`] units of FREE balance. So
-///   long as enough free balance exists, the reserved balance is irrelevant.
-/// * Destroyed: When an account has no free AND no reserved balance left, it is destroyed. This
-///   means its associated item in the balances map is REMOVED.
-/// * Invalid: Any other combination of free and reserved balance is invalid.
+/// * **Created, exists**: it means it has more than [`EXISTENTIAL_DEPOSIT`] units of FREE balance.
+///   So long as enough free balance exists, the reserved balance is irrelevant.
+/// * **Destroyed**: When an account has no free AND no reserved balance left, it is destroyed. This
+///   means its associated item in the balances map is REMOVED. This means that a potential nonce is
+///   also re-set.
+/// * **Invalid**: Any other combination of free and reserved balance is invalid.
 ///
 /// In all transactions:
 ///
@@ -261,6 +262,8 @@ pub struct AccountBalance {
 	/// The free balance that they have. This can be transferred.
 	free: Balance,
 	/// The reserved balance that they have. This CANNOT be transferred.
+	///
+	/// The reserved balance does not contribute to the account existence.
 	reserved: Balance,
 	/// The nonce of the account. Increment every time an account successfully transacts.
 	///

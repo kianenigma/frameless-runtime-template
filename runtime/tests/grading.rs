@@ -268,7 +268,6 @@ fn author_and_import(
 		}
 	});
 
-	log::debug!(target: LOG_TARGET, "all good; running post checks");
 	import_state.execute_with(|| post());
 }
 
@@ -302,8 +301,8 @@ fn new_test_ext(funded_accounts: Vec<AccountId>) -> TestExternalities {
 	} else {
 		"../target/release/wbuild/runtime/runtime.wasm"
 	});
-	let code = std::fs::read(code_path).expect("code should be present");
 	log::info!(target: LOG_TARGET, "reading code from {}", code_path);
+	let code = std::fs::read(code_path).expect("code should be present");
 	let mut storage: sp_core::storage::Storage = Default::default();
 	storage
 		.top
@@ -473,9 +472,8 @@ mod basics {
 	}
 
 	mod challenging {
-		use sp_runtime::DispatchError;
-
 		use super::*;
+		use sp_runtime::DispatchError;
 
 		#[test]
 		fn apply_sudo_set_by_bob_fails() {

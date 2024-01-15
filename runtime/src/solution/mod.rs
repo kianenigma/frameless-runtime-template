@@ -152,15 +152,6 @@ impl Runtime {
 		header
 	}
 
-	pub(crate) fn solution_do_build_config() -> sp_genesis_builder::Result {
-		BalancesMap::<Self>::set(
-			AccountId::unchecked_from(SUDO),
-			AccountBalance::new_from_free(100),
-		);
-
-		Ok(())
-	}
-
 	fn check_signature(
 		ext: &<Block as BlockT>::Extrinsic,
 	) -> Result<AccountId, TransactionValidityError> {
