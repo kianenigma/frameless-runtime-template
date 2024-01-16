@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-
 use crate::shared::HEADER_KEY;
 use parity_scale_codec::{Decode, Encode};
 use runtime::shared::TREASURY;
@@ -20,19 +18,11 @@ use sp_runtime::{
 	transaction_validity::{InvalidTransaction, TransactionSource, TransactionValidityError},
 	ApplyExtrinsicResult,
 };
+use std::cell::RefCell;
 
-// FOR NEXT TIME:
-// * The requirement to leave noted extrinsics in the state is not super clear. This one
-// tests will check it. Nonetheless, the `import_and_author_equal` will check it. We will only
-// check it here, but not in other tests.
-// * The specification is not super clear about validation of future transactions not being a
-//   failure.
-// * Clear distinction between apply and dispatch.
-// * add sp_tracing boilerplate everywhere.
-// * the only way to kill should be TransferAll, not Transfer.
-// * idea: make them use with_storage_layer
-// * idea: generalize nonce as "prevent replay attacks"
-// * decouple from mini-substrate
+// TODO: ideas for next time
+// - tool to ensure they don't add any deps to runtime.
+//
 
 mod shared;
 
@@ -223,7 +213,7 @@ fn author_and_import(
 			// check extrinsics root.
 			assert_eq!(
 				block.header.extrinsics_root,
-				BlakeTwo256::ordered_trie_root(noted_extrinsics, sp_runtime::StateVersion::V0),
+				BlakeTwo256::ordered_trie_root(noted_extrinsics, Default::default()),
 				"incorrect extrinsics root",
 			);
 		});
@@ -251,7 +241,7 @@ fn author_and_import(
 		// check extrinsics root.
 		let expected_extrinsics_root = BlakeTwo256::ordered_trie_root(
 			block.extrinsics.into_iter().map(|e| e.encode()).collect::<Vec<_>>(),
-			sp_runtime::StateVersion::V0,
+			Default::default(),
 		);
 		if expected_extrinsics_root != block.header.extrinsics_root {
 			panic!(

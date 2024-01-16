@@ -144,8 +144,7 @@ impl Runtime {
 		let state_root = sp_core::H256::decode(&mut &raw_state_root[..]).unwrap();
 
 		let extrinsics = Self::get_state::<Vec<Vec<u8>>>(EXTRINSICS_KEY).unwrap_or_default();
-		let extrinsics_root =
-			BlakeTwo256::ordered_trie_root(extrinsics, sp_runtime::StateVersion::V0);
+		let extrinsics_root = BlakeTwo256::ordered_trie_root(extrinsics, Default::default());
 
 		header.extrinsics_root = extrinsics_root;
 		header.state_root = state_root;

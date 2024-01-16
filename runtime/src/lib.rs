@@ -503,14 +503,13 @@ impl Runtime {
 	///
 	/// In our template, we call into this from both block authoring, and block import.
 	pub fn do_apply_extrinsic(ext: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
-		Self::solution_apply_extrinsic(ext.clone())
-
 		// FIXME: Following can be left or removed from the assignment as we wish.
 		// let signer = Self::verify_signed(ext.clone())?;
 		// Self::apply_predispatch(&ext, signer)?;
 		// let dispatch_outcome = Self::apply_dispatch(&ext, signer);
 		// Self::note_extrinsic(&ext);
 		// Ok(dispatch_outcome)
+		Self::solution_apply_extrinsic(ext.clone())
 	}
 
 	/// Your code path to execute a block that has been previously authored.
@@ -537,8 +536,7 @@ impl Runtime {
 
 		// check extrinsics root
 		let extrinsics = Self::get_state::<Vec<Vec<u8>>>(EXTRINSICS_KEY).unwrap_or_default();
-		let extrinsics_root =
-			BlakeTwo256::ordered_trie_root(extrinsics, sp_runtime::StateVersion::V0);
+		let extrinsics_root = BlakeTwo256::ordered_trie_root(extrinsics, Default::default());
 		assert_eq!(block.header.extrinsics_root, extrinsics_root);
 
 		info!(target: LOG_TARGET, "Finishing block import.");
@@ -550,13 +548,12 @@ impl Runtime {
 		ext: <Block as BlockT>::Extrinsic,
 		_block_hash: <Block as BlockT>::Hash,
 	) -> TransactionValidity {
-		Self::solution_validate_transaction(_source, ext, _block_hash)
-
 		// FIXME: Following can be left or removed from the assignment as we wish.
 		// let signer = Self::verify_signed(ext.clone())?;
 		// let valid = Self::validate_nonce(&ext, signer)?;
 		// Self::validate_tip(&ext, signer)?;
 		// Ok(valid)
+		Self::solution_validate_transaction(_source, ext, _block_hash)
 	}
 }
 
@@ -675,6 +672,8 @@ impl_runtime_apis! {
 				block,
 				block.extrinsics.len()
 			);
+			// Be aware: In your local tests, we assume `do_execute_block` is equal to
+			// `execute_block`.
 			Self::do_execute_block(block)
 		}
 
@@ -683,6 +682,8 @@ impl_runtime_apis! {
 				target: LOG_TARGET,
 				"Entering initialize_block. header: {:?} / version: {:?}", header, VERSION.spec_version
 			);
+			// Be aware: In your local tests, we assume `do_initialize_block` is equal to
+			// `initialize_block`.
 			Self::do_initialize_block(header)
 		}
 	}
@@ -817,14 +818,97 @@ mod tests {
 			.unwrap_or_default()
 	}
 
-	/// Fund an account with the `EXISTENTIAL_DEPOSIT` such that it can transact. This can be empty
-	/// for now, but once you implement the currency part, you need to use it.
+	/// Fund an account with `value` such that it can transact. This can be empty for now, but once
+	/// you implement the currency part, you need to use it.
 	fn fund_account(who: AccountId, amount: Balance) {
 		solution::set_free_balance(who, amount)
 	}
 
+	/// Get the balance of `who`, if it exists.
 	fn get_free_balance(who: AccountId) -> Option<Balance> {
 		solution::get_free_balance(who)
+	}
+
+	/// Author a block with the given extrinsics, using the given state. Updates the state on
+	/// the fly (for potential further inspection), and return the authored block.
+	fn author_block(exts: Vec<Extrinsic>, state: &mut TestExternalities) -> Block {
+		let header = shared::Header {
+			digest: Default::default(),
+			extrinsics_root: Default::default(),
+			parent_hash: Default::default(),
+			number: 0, // We don't care about block number here, just set it to 0.
+			state_root: Default::default(),
+		};
+
+		state.execute_with(|| {
+			Runtime::do_initialize_block(&header);
+			drop(header);
+
+			let mut extrinsics = vec![];
+			for ext in exts {
+				match Runtime::do_apply_extrinsic(ext.clone()) {
+					Ok(_) => extrinsics.push(ext),
+					Err(_) => (),
+				}
+			}
+
+			let header = Runtime::do_finalize_block();
+
+			assert!(
+				sp_io::storage::get(HEADER_KEY).is_none(),
+				"header must have been cleared from storage"
+			);
+
+			let onchain_noted_extrinsics = noted_extrinsics();
+			assert_eq!(
+				onchain_noted_extrinsics,
+				extrinsics.iter().map(|e| e.encode()).collect::<Vec<_>>(),
+				"incorrect extrinsics_key recorded in state"
+			);
+
+			let expected_state_root = {
+				let raw_state_root = &sp_io::storage::root(Default::default())[..];
+				H256::decode(&mut &raw_state_root[..]).unwrap()
+			};
+			let expected_extrinsics_root =
+				BlakeTwo256::ordered_trie_root(onchain_noted_extrinsics, Default::default());
+
+			assert_eq!(
+				header.state_root, expected_state_root,
+				"block finalization should set correct state root in header"
+			);
+			assert_eq!(
+				header.extrinsics_root, expected_extrinsics_root,
+				"block finalization should set correct extrinsics root in header"
+			);
+
+			Block { extrinsics, header }
+		})
+	}
+
+	/// Import the given block
+	fn import_block(block: Block, state: &mut TestExternalities) {
+		state.execute_with(|| {
+			// This should internally check state/extrinsics root. If it does not panic, then we
+			// are gucci.
+			Runtime::do_execute_block(block.clone());
+
+			// double check the extrinsic and state root. `do_execute_block` must have already done
+			// this, but better safe than sorry.
+			assert_eq!(
+				block.header.state_root,
+				H256::decode(&mut &sp_io::storage::root(Default::default())[..][..]).unwrap(),
+				"incorrect state root in authored block after importing"
+			);
+			assert_eq!(
+				block.header.extrinsics_root,
+				BlakeTwo256::ordered_trie_root(
+					block.extrinsics.into_iter().map(|e| e.encode()).collect::<Vec<_>>(),
+					Default::default()
+				),
+				"incorrect extrinsics root in authored block",
+			);
+		});
 	}
 
 	#[test]
@@ -959,80 +1043,24 @@ mod tests {
 			// noted.
 			let (ext1, _) = signed_set_value(42, 0);
 			let (ext2, _) = signed_set_value(43, 1);
-			let (ext3, who) = signed_set_value(44, 2);
-			let ext4 = unsigned_set_value(3);
+			let (ext3, alice) = signed_set_value(44, 2);
+			let ext4 = unsigned_set_value(45);
 
-			let header = shared::Header {
-				digest: Default::default(),
-				extrinsics_root: Default::default(),
-				parent_hash: Default::default(),
-				number: 0,
-				state_root: Default::default(),
-			};
-
-			// authoring a block:
-			let block = TestExternalities::new_empty().execute_with(|| {
-				fund_account(who, EXISTENTIAL_DEPOSIT);
-				Runtime::do_initialize_block(&header);
-				drop(header);
-
-				Runtime::do_apply_extrinsic(ext1.clone()).unwrap().unwrap();
-				Runtime::do_apply_extrinsic(ext2.clone()).unwrap().unwrap();
-				Runtime::do_apply_extrinsic(ext3.clone()).unwrap().unwrap();
-				let _ = Runtime::do_apply_extrinsic(ext4.clone()).unwrap_err();
-
-				let header = Runtime::do_finalize_block();
-
-				assert!(
-					sp_io::storage::get(HEADER_KEY).is_none(),
-					"header must have been cleared from storage"
-				);
-				let extrinsics = noted_extrinsics();
-				assert_eq!(extrinsics.len(), 3, "incorrect extrinsics_key recorded in state");
-
-				let expected_state_root = {
-					let raw_state_root = &sp_io::storage::root(Default::default())[..];
-					H256::decode(&mut &raw_state_root[..]).unwrap()
-				};
-				let expected_extrinsics_root =
-					BlakeTwo256::ordered_trie_root(extrinsics, sp_runtime::StateVersion::V0);
-
-				assert_eq!(
-					header.state_root, expected_state_root,
-					"block finalization should set correct state root in header"
-				);
-				assert_eq!(
-					header.extrinsics_root, expected_extrinsics_root,
-					"block finalization should set correct extrinsics root in header"
-				);
-
-				Block { extrinsics: vec![ext1, ext2, ext3], header }
+			let mut authoring_state = TestExternalities::new_empty();
+			authoring_state.execute_with(|| {
+				fund_account(alice, EXISTENTIAL_DEPOSIT);
 			});
+			let block = author_block(vec![ext1, ext2, ext3, ext4], &mut authoring_state);
+			authoring_state
+				.execute_with(|| assert_eq!(Runtime::get_state::<u32>(VALUE_KEY), Some(44)));
 
-			// now re-importing it.
-			TestExternalities::new_empty().execute_with(|| {
-				fund_account(who, EXISTENTIAL_DEPOSIT);
-				// This should internally check state/extrinsics root. If it does not panic, then we
-				// are gucci.
-				Runtime::do_execute_block(block.clone());
-
-				assert_eq!(Runtime::get_state::<u32>(VALUE_KEY), Some(44));
-
-				// double check the extrinsic and state root:
-				assert_eq!(
-					block.header.state_root,
-					H256::decode(&mut &sp_io::storage::root(Default::default())[..][..]).unwrap(),
-					"incorrect state root in authored block after importing"
-				);
-				assert_eq!(
-					block.header.extrinsics_root,
-					BlakeTwo256::ordered_trie_root(
-						block.extrinsics.into_iter().map(|e| e.encode()).collect::<Vec<_>>(),
-						sp_runtime::StateVersion::V0
-					),
-					"incorrect extrinsics root in authored block",
-				);
+			let mut import_state = TestExternalities::new_empty();
+			import_state.execute_with(|| {
+				fund_account(alice, EXISTENTIAL_DEPOSIT);
 			});
+			import_block(block, &mut import_state);
+			import_state
+				.execute_with(|| assert_eq!(Runtime::get_state::<u32>(VALUE_KEY), Some(44)));
 		}
 	}
 
