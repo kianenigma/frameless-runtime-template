@@ -127,16 +127,14 @@ pub const EXISTENTIAL_DEPOSIT: Balance = 10;
 ///
 /// In all transactions:
 ///
-/// - The sender of a transaction must exist prior to applying the transaction. The sender might be
-///   destroyed as a side effect of a transaction based on above conditions.
-/// - Similarly, any other parties involved in the transaction must not finish the transaction in
-///   the invalid state.
+/// - The sender of a transaction must exist prior to **applying and dispatching** the transaction.
+/// - All accounts touched in the dispatch process must finish dispatch while NOT being in the
+///   invalid state.
 ///
 /// ## Apply Errors
 ///
-/// Knowing the above, you must add a new check to your apply conditions (such as signature check),
-/// that prior to being applied, all transactions must come from a sender with an "existing"
-/// account.
+/// [`sp_runtime::transaction_validity::InvalidTransaction::BadSigner`] if the sender is
+/// non-existent prior to apply.
 ///
 /// (This probably forces you to update your tests to pre-fund a few accounts.)
 ///
@@ -157,22 +155,26 @@ pub enum CurrencyCall {
 	/// ## Dispatch Errors
 	///
 	/// * [`sp_runtime::DispatchError::BadOrigin`] if the sender is not [`SUDO`].
-	/// * [`sp_runtime::DispatchError::Token`] if the `dest` ends up in an invalid state with
-	///   respect to existential deposit.
-	/// * [`sp_runtime::DispatchError::Arithmetic`] if any type of arithmetic operation overflows.
+	/// * [`sp_runtime::DispatchError::Token`] (with `TokenError::BelowMinimum`) if the `dest` ends
+	///   up in an invalid state with respect to existential deposit.
+	/// * [`sp_runtime::DispatchError::Arithmetic`] (with `ArithmeticError::Overflow`) if any type
+	///   of arithmetic operation overflows.
 	Mint { dest: AccountId, amount: Balance },
 	/// Transfer `amount` to `dest`.
 	///
-	/// The `sender` must exist prior to applying the transaction, but the `dest` might be created
-	/// in the process. The sender might get destroyed as a consequence of dispatch.
+	/// The `sender` must exist prior to dispatching the transaction, but the `dest` might be
+	/// created in the process. The sender might get destroyed as a consequence of dispatch.
 	///
 	/// ## Dispatch Errors
 	///
-	/// * [`sp_runtime::DispatchError::Token`] If either `sender` or `dest` end up in an invalid
-	///   state with respect to existential deposit.
-	/// * [`sp_runtime::DispatchError::Arithmetic`] if any type of arithmetic operation overflows.
+	/// * [`sp_runtime::DispatchError::Token`] (with `TokenError::BelowMinimum`) If either `sender`
+	///   or `dest` end up in an invalid state with respect to existential deposit.
+	/// * [`sp_runtime::DispatchError::Arithmetic`] (with `ArithmeticError::Overflow`) if any type
+	///   of arithmetic operation overflows.
 	Transfer { dest: AccountId, amount: Balance },
 	/// Alias for `Transfer { dest, amount: sender.free }`.
+	///
+	/// Noop if `dest` is same as the sender.
 	TransferAll { dest: AccountId },
 }
 
@@ -202,9 +204,10 @@ pub enum StakingCall {
 	/// ## Dispatch Errors
 	///
 	/// * [`sp_runtime::DispatchError::BadOrigin`] if the sender does not exist.
-	/// * [`sp_runtime::DispatchError::Token`] If `sender` ends up in an invalid state with respect
-	///   to existential deposit.
-	/// * [`sp_runtime::DispatchError::Arithmetic`] if any type of arithmetic operation overflows.
+	/// * [`sp_runtime::DispatchError::Token`] (with `TokenError::BelowMinimum`) If `sender` ends
+	///   up in an invalid state with respect to existential deposit.
+	/// * [`sp_runtime::DispatchError::Arithmetic`] (with `ArithmeticError::Overflow`) if any type
+	///   of arithmetic operation overflows.
 	Bond { amount: Balance },
 }
 

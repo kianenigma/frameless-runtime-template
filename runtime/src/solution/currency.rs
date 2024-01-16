@@ -86,7 +86,7 @@ impl<T: Config> From<Error<T>> for sp_runtime::DispatchError {
 	fn from(e: Error<T>) -> Self {
 		match e {
 			Error::DoesNotExist => DispatchError::BadOrigin,
-			Error::InsufficientFunds => DispatchError::Token(sp_runtime::TokenError::Unsupported),
+			Error::InsufficientFunds => DispatchError::Token(sp_runtime::TokenError::BelowMinimum),
 			Error::Overflow => DispatchError::Arithmetic(sp_runtime::ArithmeticError::Overflow),
 			Error::__marker(_) => unreachable!(),
 		}
@@ -221,6 +221,9 @@ impl<T: Config> Module<T> {
 		allow_zero: bool,
 	) -> DispatchOutcome {
 		let mut sender_balance = BalancesMap::<T>::get(sender).ok_or(Error::<T>::DoesNotExist)?;
+		if sender == dest && sender_balance.free >= amount {
+			return Ok(());
+		}
 		let mut dest_balance = BalancesMap::<T>::get(dest).unwrap_or_default();
 
 		sender_balance.can_withdraw(amount, allow_zero)?;
@@ -242,6 +245,11 @@ impl<T: Config> Module<T> {
 
 	fn transfer_all(sender: AccountId, dest: AccountId) -> DispatchOutcome {
 		let balance = BalancesMap::<T>::get(sender).ok_or(Error::<T>::DoesNotExist)?;
+
+		if sender == dest {
+			return Ok(());
+		}
+
 		if !balance.reserved.is_zero() {
 			Err(DispatchError::Token(sp_runtime::TokenError::BelowMinimum))?;
 		}
