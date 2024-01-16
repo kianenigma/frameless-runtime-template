@@ -320,18 +320,7 @@
 //! That being said, you can use types that are equivalent to their encoding to the ones mentioned
 //! in [`shared`].
 //!
-//! Rubric:
-//!
-//! The assignment is broadly composed of the following 4 parts, each of which is worth 1 point.
-//!
-//! * Basics: 1 point
-//! * Currency: 1 point
-//! * Staking and Tipping: 1 point
-//! * Nonce: 1 point
-//!
-//! You should of course focus on getting the provided unit tests to pass. The final grade will be
-//! calculated over a much more extensive suite of tests. You will be given a few trial submissions
-//! prior to the final submission. More on this will be announced in the lectures.
+//! Rubric: TBA
 //!
 //! ## Hints
 //!
