@@ -501,7 +501,7 @@ mod basics {
 		use super::*;
 
 		#[test]
-		#[cfg_attr(feature = "pre-score", ignore)]
+		#[cfg_attr(feature = "pre-grade", ignore)]
 		fn validate_sudo_set_by_bob() {
 			// Bob won't be able to dispatch this, but we should not need to care about this.
 			let ext = signed(RuntimeCall::System(SystemCall::SudoSet { value: 777 }), &Bob, 0);
@@ -1039,7 +1039,7 @@ mod currency {
 		}
 
 		#[test]
-		#[cfg_attr(feature = "pre-score", ignore)]
+		#[cfg_attr(feature = "pre-grade", ignore)]
 		fn alice_mints_u128_to_bob() {
 			let mut state = new_test_ext(vec![Alice.public()]);
 			let pre_issuance = state.execute_with(|| issuance().unwrap_or_default());
@@ -1073,7 +1073,7 @@ mod currency {
 		}
 
 		#[test]
-		#[cfg_attr(feature = "pre-score", ignore)]
+		#[cfg_attr(feature = "pre-grade", ignore)]
 		fn alice_mints_entire_issuance_to_bob() {
 			let mut state = new_test_ext(vec![Alice.public()]);
 			let pre_issuance = state.execute_with(|| issuance().unwrap_or_default());
@@ -1139,7 +1139,7 @@ mod currency {
 		}
 
 		#[test]
-		#[cfg_attr(feature = "pre-score", ignore)]
+		#[cfg_attr(feature = "pre-grade", ignore)]
 		fn alice_mints_100_to_bob_bob_transfers_95_to_bob() {
 			let mut state = new_test_ext(vec![Alice.public()]);
 			let pre_issuance = state.execute_with(|| issuance().unwrap_or_default());
@@ -1176,7 +1176,7 @@ mod currency {
 		}
 
 		#[test]
-		#[cfg_attr(feature = "pre-score", ignore)]
+		#[cfg_attr(feature = "pre-grade", ignore)]
 		fn alice_mints_100_to_bob_bob_transfers_all_to_bob() {
 			let mut state = new_test_ext(vec![Alice.public()]);
 			let pre_issuance = state.execute_with(|| issuance().unwrap_or_default());
@@ -1214,7 +1214,7 @@ mod currency {
 		use super::*;
 
 		#[test]
-		#[cfg_attr(feature = "pre-score", ignore)]
+		#[cfg_attr(feature = "pre-grade", ignore)]
 		fn alice_mints_100_to_bob_bob_transfers_120_to_bob() {
 			let mut state = new_test_ext(vec![Alice.public()]);
 			let pre_issuance = state.execute_with(|| issuance().unwrap_or_default());

@@ -13,7 +13,7 @@ import time
 import hashlib
 
 base_directory = (
-    "/Users/kianenigma/Desktop/Parity/pba/assignment-3-frame-less-submissions"
+    "/Users/kianenigma/Desktop/Parity/pba4/hk-2024-assignment-3-frameless-submissions/"
 )
 
 
@@ -40,7 +40,7 @@ def build_wasms():
                 checksum = hashlib.md5(f.read()).hexdigest()
                 if checksum in wasm_hash_set:
                     print(
-                        f"⚠️ {student_folder} has a duplicate runtime.wasm md5 hash {check}"
+                        f"⚠️ {student_folder} has a duplicate runtime.wasm md5 hash {checksum}"
                     )
 
                 wasm_hash_set.add(checksum)
@@ -412,10 +412,10 @@ test failures. The subgroups, and their respective maximum number of allowed fai
 
 * **fundamentals**: 0 -- you are allowed to have no failures in this subgroup.
 * **challenging**: [1-3] -- you are allowed to have a number of failures in this subgroup. These are
-  tests that are more challenging, and we expect you to get some of them wrong, but not all.
+	tests that are more challenging, and we expect you to get some of them wrong, but not all.
 * **optional**: +infinity -- you are allowed to have any number of failures here, and it will have no
-  impact on your auto-computed score. These are edge cases that we didn't expect you to get
-  correctly, because the assignment didn't clarify them.
+	impact on your auto-computed score. These are edge cases that we didn't expect you to get
+	correctly, because the assignment didn't clarify them.
 
 > In the end, we made the fundamentals subgroup of `basics` group allow for **1** test failure as
 well.
@@ -430,50 +430,50 @@ Is a test in the tipping group, and _fundamentals_ subgroup.
 The number of tests, and max failures for each subgroup are as follows:
 
 * basics:
-    * {basics_fundamentals_test_count} fundamental tests, {basics_max_fundamentals_failures} max failures.
-    * {basics_challenging_test_count} challenging tests, {basics_max_failure} max failures
-    * {nonce_optional_test_count} optional tests
+		* {basics_fundamentals_test_count} fundamental tests, {basics_max_fundamentals_failures} max failures.
+		* {basics_challenging_test_count} challenging tests, {basics_max_failure} max failures
+		* {nonce_optional_test_count} optional tests
 * currency:
-    * {currency_fundamentals_test_count} fundamental tests, {currency_max_fundamentals_failures} max failures.
-    * {currency_challenging_test_count} challenging tests, {currency_max_failure} max failures
-    * {currency_optional_test_count} optional tests
+		* {currency_fundamentals_test_count} fundamental tests, {currency_max_fundamentals_failures} max failures.
+		* {currency_challenging_test_count} challenging tests, {currency_max_failure} max failures
+		* {currency_optional_test_count} optional tests
 * staking:
-    * {staking_fundamentals_test_count} fundamental tests, {staking_max_fundamentals_failures} max failures.
-    * {staking_challenging_test_count} challenging tests, {staking_max_failure} max failures
-    * {staking_optional_test_count} optional tests
+		* {staking_fundamentals_test_count} fundamental tests, {staking_max_fundamentals_failures} max failures.
+		* {staking_challenging_test_count} challenging tests, {staking_max_failure} max failures
+		* {staking_optional_test_count} optional tests
 * tipping:
-    * {tipping_fundamentals_test_count} fundamental tests, {tipping_max_fundamentals_failures} max failures.
-    * {tipping_challenging_test_count} challenging tests, {tipping_max_failure} max failures
-    * {tipping_optional_test_count} optional tests
+		* {tipping_fundamentals_test_count} fundamental tests, {tipping_max_fundamentals_failures} max failures.
+		* {tipping_challenging_test_count} challenging tests, {tipping_max_failure} max failures
+		* {tipping_optional_test_count} optional tests
 * nonce:
-    * {nonce_fundamentals_test_count} fundamental tests, {nonce_max_fundamentals_failures} max failures.
-    * {nonce_challenging_test_count} challenging tests, {nonce_max_failure} max failures
-    * {nonce_optional_test_count} optional tests
+		* {nonce_fundamentals_test_count} fundamental tests, {nonce_max_fundamentals_failures} max failures.
+		* {nonce_challenging_test_count} challenging tests, {nonce_max_failure} max failures
+		* {nonce_optional_test_count} optional tests
 
 </details>
 
 ## Auto-Graded Score
 
 * basics
-    * {b1['summary']}
-    * {b2['summary']}
-    * {b3['summary']}
+		* {b1['summary']}
+		* {b2['summary']}
+		* {b3['summary']}
 * currency
-    * {c1['summary']}
-    * {c2['summary']}
-    * {c3['summary']}
+		* {c1['summary']}
+		* {c2['summary']}
+		* {c3['summary']}
 * staking
-    * {s1['summary']}
-    * {s2['summary']}
-    * {s3['summary']}
+		* {s1['summary']}
+		* {s2['summary']}
+		* {s3['summary']}
 * tipping
-    * {t1['summary']}
-    * {t2['summary']}
-    * {t3['summary']}
+		* {t1['summary']}
+		* {t2['summary']}
+		* {t3['summary']}
 * nonce
-    * {n1['summary']}
-    * {n2['summary']}
-    * {n3['summary']}
+		* {n1['summary']}
+		* {n2['summary']}
+		* {n3['summary']}
 
 {final_summary}
 

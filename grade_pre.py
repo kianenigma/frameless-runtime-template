@@ -1,20 +1,35 @@
 import os
 import subprocess
 import sys
+import hashlib
 
-base_directory = "/Users/kianenigma/Desktop/Parity/pba4/frameless-submissions"
+base_directory = (
+    "/Users/kianenigma/Desktop/Parity/pba4/hk-2024-assignment-3-frameless-submissions"
+)
 
+wasm_hash_set = set()
+
+
+def maybe_filter(folder):
+    if folder.startswith("hk-2024-assignment-3-frameless"):
+        if len(sys.argv) > 1:
+            if sys.argv[1] not in folder:
+                print(f"🏹 {sys.argv[1]} not in {folder}, skipping to next folder.")
+                return False
+        return True
+    else:
+        print(
+            f"🏹 {folder} does not start with hk-2024-assignment-3-frameless, skipping to next folder."
+        )
+        return False
+
+
+print(os.listdir(base_directory))
 for folder in os.listdir(base_directory):
-    if not folder.startswith("assignment-3-frame-less"):
+    if not maybe_filter(folder):
         continue
 
-    # if the a command line arg is set, make sure 'folder' contains that arg as a string, otherwise skip to next folder.
-    if len(sys.argv) > 1:
-        if sys.argv[1] not in folder:
-            print(f"⚠️ {sys.argv[1]} not in {folder}, skipping to next folder.")
-            continue
     student_folder = os.path.join(base_directory, folder)
-
     # fetch a branch called "wasm", if any.
     subprocess.run(
         ["git", "fetch", "origin"],
@@ -25,7 +40,7 @@ for folder in os.listdir(base_directory):
 
     # if wasm branch exists, switch to that branch
     checkout_output = subprocess.run(
-        ["git", "checkout", "wasm"],
+        ["git", "checkout", "pregrade"],
         cwd=student_folder,
         stderr=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -33,13 +48,13 @@ for folder in os.listdir(base_directory):
 
     if checkout_output.returncode != 0:
         print(
-            f"⚠️ No branch called 'wasm' in {student_folder}, skipping to next folder."
+            f"⚠️ No branch called 'pregrade' in {student_folder}, skipping to next folder."
         )
         continue
 
     # reset everything
     subprocess.run(
-        ["git", "reset", "--hard", "origin/wasm"],
+        ["git", "reset", "--hard", "origin/pregrade"],
         cwd=student_folder,
         stderr=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -48,20 +63,32 @@ for folder in os.listdir(base_directory):
     # run the script
     wasm_file_path = os.path.join(student_folder, "runtime.wasm")
     if os.path.exists(wasm_file_path):
+        # calculate the md5 checksum by reading the file
+        with open(os.path.join(student_folder, "runtime.wasm"), "rb") as f:
+            checksum = hashlib.md5(f.read()).hexdigest()
+            if checksum in wasm_hash_set:
+                print(
+                    f"⚠️ {student_folder} has a duplicate runtime.wasm md5 hash {checksum}"
+                )
+
+            wasm_hash_set.add(checksum)
+
         stdout_file = open("./stdout.txt", "w")
         stderr_file = open("./stderr.txt", "w")
-        script_path = "./pre_grade.sh"
-        print(f"✅ running pre_grading on {wasm_file_path}")
+        script_path = "./grade_pre.sh"
+        print(f"✅ running {script_path} {wasm_file_path}")
         # pipe output to a file.
         subprocess.run(
             ["bash", script_path, wasm_file_path],
             stdout=stdout_file,
             stderr=stderr_file,
+            check=True,
         )
 
         # move stdout and stderr file to student_folder
         if os.path.exists("stdout.txt"):
             os.rename("stdout.txt", os.path.join(student_folder, "stdout.txt"))
+
         if os.path.exists("stderr.txt"):
             # read stderr.txt and print a line in it that contains "Summary", if it exists
             with open("stderr.txt", "r") as stderr_file:
@@ -69,12 +96,13 @@ for folder in os.listdir(base_directory):
                     if "Summary" in line:
                         print(line)
 
-            # read stderr.txt, and replace any instance of "/Users/kianenigma/Desktop/Parity/pba/" in it with ""
+            # read stderr.txt, and replace any instance of "/Users/kianenigma/Desktop/Parity/pba4/" in it with ""
             with open("stderr.txt", "r") as stderr_file:
                 stderr_content = stderr_file.read()
                 stderr_content = stderr_content.replace(
-                    "/Users/kianenigma/Desktop/Parity/pba/", ""
+                    "/Users/kianenigma/Desktop/Parity/pba4/", ""
                 )
+
                 # If "incorrect extrinsics root in authored" is in stderr_content, increment a counter and print warning
                 if "incorrect extrinsics root in authored block" in stderr_content:
                     print(f"🦷 FOUND incorrect extrinsics root {student_folder}")
@@ -83,12 +111,19 @@ for folder in os.listdir(base_directory):
                     stderr_file.write(stderr_content)
 
             os.rename("stderr.txt", os.path.join(student_folder, "stderr.txt"))
-        # if a file `result.xml` exists in the current folder, move it to `student_folder`.abs
+
+        # if a file `result.json` exists in the current folder, move it to `student_folder`.
+        if os.path.exists("result.json"):
+            os.rename("result.json", os.path.join(student_folder, "result.json"))
+
+        # if a file `result.xml` exists in the current folder, move it to `student_folder`.
         if os.path.exists("result.xml"):
             os.rename("result.xml", os.path.join(student_folder, "result.xml"))
 
-            # subprocess.run(["git", "add", "."], cwd=student_folder)
-            # subprocess.run(["git", "commit", "-m", "Add results"], cwd=student_folder)
-            # output = subprocess.run(["git", "push"], cwd=student_folder)
+            subprocess.run(["git", "add", "."], cwd=student_folder, check=True)
+            subprocess.run(
+                ["git", "commit", "-m", "Add results"], cwd=student_folder, check=True
+            )
+            output = subprocess.run(["git", "push"], cwd=student_folder, check=True)
     else:
         print(f"Could not find {wasm_file_path}, skipping to next folder.")

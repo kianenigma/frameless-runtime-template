@@ -66,4 +66,4 @@ std = [
 	"substrate-wasm-builder",
 ]
 # This is only used in grading -- students should ignore.
-pre-score = []
+pre-grade = []
