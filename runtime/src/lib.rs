@@ -297,8 +297,9 @@
 //! ## Grading
 //!
 //! This assignment is primarily graded through automatic tests, not by looking at the internals of
-//! your runtime. Manual grading is a small part. This means you should be very careful about
-//! adhering to the rules and specifications.
+//! your runtime. We will manually look into each student's code and provide feedback as well, but
+//! this will not contribute to your grade. This means you should be very careful about adhering to
+//! the rules and specifications.
 //!
 //! Automatic Wasm grading means:
 //!
@@ -945,9 +946,8 @@ mod tests {
 
 	// Basic tests related to step 0.
 	mod basics {
-		use crate::shared::EXISTENTIAL_DEPOSIT;
-
 		use super::*;
+		use crate::shared::EXISTENTIAL_DEPOSIT;
 
 		#[test]
 		fn signed_set_value_works() {
@@ -1143,12 +1143,10 @@ mod tests {
 	}
 
 	mod nonce {
+		use super::signed_set_value;
+		use crate::{shared::EXISTENTIAL_DEPOSIT, tests::fund_account, Runtime};
 		use sp_io::TestExternalities;
 		use sp_runtime::transaction_validity::{InvalidTransaction, TransactionValidityError};
-
-		use crate::{shared::EXISTENTIAL_DEPOSIT, tests::fund_account, Runtime};
-
-		use super::signed_set_value;
 
 		#[test]
 		fn bad_nonce_fails_apply() {
