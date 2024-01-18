@@ -1,16 +1,29 @@
+### Score Calculation
+
 The assignment is broadly composed of the following 4 parts, each of which is worth 1 point.
 
 * Basics: 1 point
 * Currency: 1 point
-* Tipping: 1 point
-* Nonce: 1 point
-* Staking optional
-* pre-grading
-	* Thursday 8pm
-	* Friday 8pm
-	* Saturday 10am, 4pm
-* Final deadline: Saturday 10pm
+* Tipping or Nonce: 1 point
+* Staking: Optional
+* 4th point is reserved for distinction.
 
-You should of course focus on getting the provided unit tests to pass. The final grade will be
-calculated over a much more extensive suite of tests. You will be given a few trial submissions
-prior to the final submission. More on this will be announced in the lectures.
+### pre-grading
+
+Create a branch in your repo called `pregrade`. Place a file called `runtime.wasm` in the root of
+your file tree in this branch. This must be your runtime compiled with `--release`. Push this file.
+Your results will be pushed back to the same branch.
+
+Submission times:
+	* Thursday 8pm
+	* Friday 4pm, 8pm
+	* Saturday 10am, 4pm
+
+### final grading
+
+Same as above, but don't create a new branch. Place `runtime.wasm` at the root of your `main` branch
+and push it. Make sure to do this prior to the deadline.
+
+Recall: Final deadline is Saturday 10pm.
+
+Good luck!
