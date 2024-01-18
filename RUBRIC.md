@@ -1,12 +1,13 @@
-### Score Calculation
-
-The assignment is broadly composed of the following 4 parts, each of which is worth 1 point.
+The assignment is broadly composed of the following parts:
 
 * Basics: 1 point
 * Currency: 1 point
 * Tipping or Nonce: 1 point
 * Staking: Optional
 * 4th point is reserved for distinction.
+
+**Please make sure you work on the above points in the given order**: First do the basics, then
+currency, then tipping/and or nonce, and iff you have time left, staking.
 
 ### pre-grading
 
