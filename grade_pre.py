@@ -24,7 +24,6 @@ def maybe_filter(folder):
         return False
 
 
-print(os.listdir(base_directory))
 for folder in os.listdir(base_directory):
     if not maybe_filter(folder):
         continue
