@@ -91,7 +91,7 @@ pub const EXISTENTIAL_DEPOSIT: Balance = 10;
 /// ## Storage Layout
 ///
 /// * mapping [`AccountId`] to [`AccountBalance`] kept at `BalancesMap + encode(account)`.
-/// * value of type [`Balance`] for total issuance kept at `TotalIssuance`.
+/// * value of type [`Balance`] for total issuance kept at `TotalIssuance` key.
 ///
 /// ```
 /// use sp_keyring::AccountKeyring;

@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import time
 import hashlib
 
 base_directory = (
@@ -35,6 +36,7 @@ for folder in os.listdir(base_directory):
         cwd=student_folder,
         stderr=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
+        check=True,
     )
 
     # if wasm branch exists, switch to that branch
@@ -57,6 +59,7 @@ for folder in os.listdir(base_directory):
         cwd=student_folder,
         stderr=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
+        check=True,
     )
 
     # run the script
@@ -75,13 +78,18 @@ for folder in os.listdir(base_directory):
         stdout_file = open("./stdout.txt", "w")
         stderr_file = open("./stderr.txt", "w")
         script_path = "./grade_pre.sh"
-        print(f"✅ running {script_path} {wasm_file_path}")
+        start_time = time.time()
         # pipe output to a file.
         subprocess.run(
             ["bash", script_path, wasm_file_path],
             stdout=stdout_file,
             stderr=stderr_file,
             check=True,
+        )
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(
+            f"✅ finished running {script_path} {wasm_file_path} in {elapsed_time:.2f}s"
         )
 
         # move stdout and stderr file to student_folder
@@ -119,10 +127,10 @@ for folder in os.listdir(base_directory):
         if os.path.exists("result.xml"):
             os.rename("result.xml", os.path.join(student_folder, "result.xml"))
 
-            subprocess.run(["git", "add", "."], cwd=student_folder, check=True)
-            subprocess.run(
-                ["git", "commit", "-m", "Add results"], cwd=student_folder, check=True
-            )
-            output = subprocess.run(["git", "push"], cwd=student_folder, check=True)
+            # subprocess.run(["git", "add", "."], cwd=student_folder, check=True)
+            # subprocess.run(
+            #     ["git", "commit", "-m", "Add results"], cwd=student_folder, check=True
+            # )
+            # output = subprocess.run(["git", "push"], cwd=student_folder, check=True)
     else:
         print(f"Could not find {wasm_file_path}, skipping to next folder.")

@@ -23,6 +23,9 @@ use std::cell::RefCell;
 // TODO: ideas for next time
 // - tool to ensure they don't add any deps to runtime.
 // - make encode_append works
+// - overflow errors are not sensible. Give an overall verdict that all arithmetic operations should
+//   saturate and never return that.
+// - more sanity checks to make sure keys are calculated correctly.
 
 mod shared;
 
@@ -826,7 +829,7 @@ mod currency {
 						&Bob,
 						0,
 					),
-					Some(Ok(Err(DispatchError::Token(TokenError::BelowMinimum)))),
+					None,
 				),
 			];
 
@@ -1143,7 +1146,8 @@ mod currency {
 						&Bob,
 						0,
 					),
-					Some(Ok(Err(DispatchError::Token(TokenError::BelowMinimum)))),
+					// TODO: unclear of this should `Overflow`/`Underflow`` or `BelowMinimum``
+					None,
 				),
 			];
 

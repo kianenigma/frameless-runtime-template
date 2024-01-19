@@ -31,6 +31,7 @@ def build_wasms():
             cwd=student_folder,
             stderr=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
+            check=True,
         )
 
         # if a wasm file already exists at student_folder + wasm, skip to next folder.
@@ -57,6 +58,7 @@ def build_wasms():
             cwd=student_folder,
             stderr=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
+            check=True,
         )
 
         # copy the wasm file to the root of the folder.
@@ -82,6 +84,7 @@ def build_wasms():
             cwd=student_folder,
             stderr=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
+            check=True,
         )
 
     print("🎉 done building wasm files and all clean.")
@@ -201,6 +204,7 @@ def grade_test_module(folder, test_prefix, max_failures):
         cwd=".",
         stderr=stderr_file,
         stdout=subprocess.DEVNULL,
+        check=True,
     )
 
     # copy the xml file to root for better visibility:
@@ -569,20 +573,41 @@ def push_grades(actually_push):
         student_folder = os.path.join(base_directory, folder)
 
         # checkout to a branch called `grade`
-        subprocess.run(["git", "checkout", "-b", "grade"], cwd=student_folder)
-        subprocess.run(["git", "add", "result.md"], cwd=student_folder)
-        subprocess.run(["git", "add", "result/"], cwd=student_folder)
-        subprocess.run(["git", "commit", "-m", "autograding"], cwd=student_folder)
+        subprocess.run(
+            ["git", "checkout", "-b", "grade"],
+            cwd=student_folder,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "add", "result.md"],
+            cwd=student_folder,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "add", "result/"],
+            cwd=student_folder,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "autograding"],
+            cwd=student_folder,
+            check=True,
+        )
 
         # push
         if actually_push:
-            subprocess.run(["git", "push", "origin", "grade"], cwd=student_folder)
+            subprocess.run(
+                ["git", "push", "origin", "grade"],
+                cwd=student_folder,
+                check=True,
+            )
 
             with open(f"{student_folder}/result.md", "r") as f:
                 result = f.read()
                 subprocess.run(
                     ["gh", "pr", "create", "--title", "Grade", "--body", result],
                     cwd=student_folder,
+                    check=True,
                 )
 
 
@@ -594,8 +619,16 @@ def clear_all_artifacts():
         student_folder = os.path.join(base_directory, folder)
 
         # delete `result.md` and `result/` folder
-        subprocess.run(["rm", "-rf", "result.md"], cwd=student_folder)
-        subprocess.run(["rm", "-rf", "./result"], cwd=student_folder)
+        subprocess.run(
+            ["rm", "-rf", "result.md"],
+            cwd=student_folder,
+            check=True,
+        )
+        subprocess.run(
+            ["rm", "-rf", "./result"],
+            cwd=student_folder,
+            check=True,
+        )
 
 
 if __name__ == "__main__":
