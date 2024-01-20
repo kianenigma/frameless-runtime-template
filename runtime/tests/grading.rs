@@ -1478,9 +1478,13 @@ mod tipping_all_tests_start_with_alice_minting_100_to_bob {
 
 			// now run validation on top of this state.
 			let to_validate =
-				tipped(RuntimeCall::System(SystemCall::Set { value: 42 }), &Bob, 1, 5);
+				tipped(RuntimeCall::System(SystemCall::Set { value: 42 }), &Bob, 0, 5);
 			let validity = validate(to_validate, &mut state);
-			assert!(matches!(validity, Ok(ValidTransaction { priority: 5, .. })));
+			assert!(
+				matches!(validity, Ok(ValidTransaction { priority: 5, .. })),
+				"validity should be Ok(ValidTransaction {{ priority: 5, .. }}), got {:?}",
+				validity
+			);
 		}
 
 		#[test]
