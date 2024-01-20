@@ -54,18 +54,11 @@ for folder in os.listdir(base_directory):
 
     # reset and pull everything
     subprocess.run(
-        ["git", "reset", "--hard"],
+        ["git", "reset", "--hard", "origin/pregrade"],
         cwd=student_folder,
         stderr=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "pull", "origin", "pregrade"],
-        cwd=student_folder,
-        stderr=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        check=True,
+        # check=True,
     )
 
     # get the latest commit hash from git log
@@ -146,10 +139,10 @@ for folder in os.listdir(base_directory):
 
         # if environment variable PUSH=1 is set, then do the following:
         if os.environ.get("PUSH") == "1":
-            subprocess.run(["git", "add", "."], cwd=student_folder, check=True)
+            subprocess.run(["git", "add", "."], cwd=student_folder, check=False)
             subprocess.run(
-                ["git", "commit", "-m", "Add results"], cwd=student_folder, check=True
+                ["git", "commit", "-m", "Add results"], cwd=student_folder, check=False
             )
-            output = subprocess.run(["git", "push"], cwd=student_folder, check=True)
+            output = subprocess.run(["git", "push"], cwd=student_folder, check=False)
     else:
         print(f"Could not find {wasm_file_path}, skipping to next folder.")
