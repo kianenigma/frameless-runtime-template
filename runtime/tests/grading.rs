@@ -26,6 +26,8 @@ use std::cell::RefCell;
 // - overflow errors are not sensible. Give an overall verdict that all arithmetic operations should
 //   saturate and never return that.
 // - more sanity checks to make sure keys are calculated correctly.
+// - treasury overflow in apply phase.
+// - nonce overflow/underflow.
 
 mod shared;
 
@@ -1407,7 +1409,7 @@ mod tipping_all_tests_start_with_alice_minting_100_to_bob {
 
 			// now run validation on top of this state.
 			let to_validate =
-				tipped(RuntimeCall::System(SystemCall::Set { value: 42 }), &Bob, 1, 15);
+				tipped(RuntimeCall::System(SystemCall::Set { value: 42 }), &Bob, 0, 15);
 			let validity = validate(to_validate, &mut state);
 			assert!(matches!(validity, Ok(ValidTransaction { priority: 15, .. })));
 		}
@@ -1432,7 +1434,7 @@ mod tipping_all_tests_start_with_alice_minting_100_to_bob {
 			let mut state = state_with_bob();
 
 			let to_validate =
-				tipped(RuntimeCall::System(SystemCall::Set { value: 42 }), &Bob, 1, 105);
+				tipped(RuntimeCall::System(SystemCall::Set { value: 42 }), &Bob, 0, 105);
 			let validity = validate(to_validate, &mut state);
 			assert_eq!(
 				validity,
@@ -1527,7 +1529,11 @@ mod tipping_all_tests_start_with_alice_minting_100_to_bob {
 			];
 
 			author_and_import(&mut state, exts, || {
-				assert!(treasury().is_none(), "treasury account should not exist");
+				assert_eq!(
+					treasury().unwrap_or_default(),
+					0,
+					"treasury account should be zero or non-existent"
+				);
 				assert_eq!(
 					free_of(Bob.public()).unwrap_or_default(),
 					75,
@@ -1561,7 +1567,11 @@ mod tipping_all_tests_start_with_alice_minting_100_to_bob {
 			];
 
 			author_and_import(&mut state, exts, || {
-				assert!(treasury().is_none(), "treasury account should not exist");
+				assert_eq!(
+					treasury().unwrap_or_default(),
+					0,
+					"treasury account should be zero or non-existent"
+				);
 				assert_eq!(
 					free_of(Bob.public()).unwrap_or_default(),
 					95,

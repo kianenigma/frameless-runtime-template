@@ -30,13 +30,12 @@ for folder in os.listdir(base_directory):
         continue
 
     student_folder = os.path.join(base_directory, folder)
-    # fetch a branch called "wasm", if any.
+    # fetch a branch called "pregrade", if any.
     subprocess.run(
-        ["git", "fetch", "origin"],
+        ["git", "fetch", "origin", "pregrade"],
         cwd=student_folder,
         stderr=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
-        check=True,
     )
 
     # if wasm branch exists, switch to that branch
@@ -53,14 +52,32 @@ for folder in os.listdir(base_directory):
         )
         continue
 
-    # reset everything
+    # reset and pull everything
     subprocess.run(
-        ["git", "reset", "--hard", "origin/pregrade"],
+        ["git", "reset", "--hard"],
         cwd=student_folder,
         stderr=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         check=True,
     )
+    subprocess.run(
+        ["git", "pull", "origin", "pregrade"],
+        cwd=student_folder,
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        check=True,
+    )
+
+    # get the latest commit hash from git log
+    git_log_output = subprocess.run(
+        ["git", "log", "-1", "--pretty=format:%H"],
+        cwd=student_folder,
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        check=True,
+    )
+    commit_hash = git_log_output.stdout.decode("utf-8")
+    print(f"⛓️ {student_folder.split('/')[-1]} is at commit {commit_hash}")
 
     # run the script
     wasm_file_path = os.path.join(student_folder, "runtime.wasm")
@@ -127,10 +144,12 @@ for folder in os.listdir(base_directory):
         if os.path.exists("result.xml"):
             os.rename("result.xml", os.path.join(student_folder, "result.xml"))
 
-            # subprocess.run(["git", "add", "."], cwd=student_folder, check=True)
-            # subprocess.run(
-            #     ["git", "commit", "-m", "Add results"], cwd=student_folder, check=True
-            # )
-            # output = subprocess.run(["git", "push"], cwd=student_folder, check=True)
+        # if environment variable PUSH=1 is set, then do the following:
+        if os.environ.get("PUSH") == "1":
+            subprocess.run(["git", "add", "."], cwd=student_folder, check=True)
+            subprocess.run(
+                ["git", "commit", "-m", "Add results"], cwd=student_folder, check=True
+            )
+            output = subprocess.run(["git", "push"], cwd=student_folder, check=True)
     else:
         print(f"Could not find {wasm_file_path}, skipping to next folder.")
