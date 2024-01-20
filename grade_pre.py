@@ -56,14 +56,7 @@ for folder in os.listdir(base_directory):
 
         # reset and pull everything
         subprocess.run(
-            ["git", "reset", "--hard"],
-            cwd=student_folder,
-            stderr=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            check=True,
-        )
-        subprocess.run(
-            ["git", "pull", "origin", "pregrade"],
+            ["git", "reset", "--hard", "origin/pregrade"],
             cwd=student_folder,
             stderr=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
