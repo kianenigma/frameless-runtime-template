@@ -359,18 +359,6 @@ mod basics {
 		}
 
 		#[test]
-		fn remark() {
-			let ext =
-				signed(RuntimeCall::System(SystemCall::Remark { data: vec![42, 42] }), &Alice, 0);
-			let exts = vec![(ext, Some(Ok(Ok(()))))];
-			let mut state = new_test_ext(vec![Alice.public()]);
-
-			author_and_import_checked(&mut state, exts, || {
-				assert!(sp_io::storage::get(VALUE_KEY).is_none(), "remark should not change state");
-			});
-		}
-
-		#[test]
 		fn set_value() {
 			let exts = vec![(
 				signed(RuntimeCall::System(SystemCall::Set { value: 42 }), &Alice, 0),
@@ -507,6 +495,18 @@ mod basics {
 					sp_io::storage::get(SUDO_VALUE_KEY).is_none(),
 					"should not set the SUDO_VALUE_KEY by bob"
 				);
+			});
+		}
+
+		#[test]
+		fn remark() {
+			let ext =
+				signed(RuntimeCall::System(SystemCall::Remark { data: vec![42, 42] }), &Alice, 0);
+			let exts = vec![(ext, Some(Ok(Ok(()))))];
+			let mut state = new_test_ext(vec![Alice.public()]);
+
+			author_and_import_checked(&mut state, exts, || {
+				assert!(sp_io::storage::get(VALUE_KEY).is_none(), "remark should not change state");
 			});
 		}
 	}
