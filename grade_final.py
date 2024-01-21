@@ -12,9 +12,8 @@ from datetime import datetime
 import time
 import hashlib
 
-base_directory = (
-    "/Users/kianenigma/Desktop/Parity/pba4/hk-2024-assignment-3-frameless-submissions/"
-)
+base_directory = "/Users/kianenigma/Desktop/Parity/pba4/hk-2024-assignment-3-frameless-submissions"
+prefix = "hk-2024-assignment-3-frameless"
 
 
 def build_wasms():
@@ -51,15 +50,19 @@ def build_wasms():
                 continue
 
         print(f"👷 building {student_folder}")
-        # pipe stderr such that it gets displayed in just one line, updating as new things happen.
 
-        subprocess.run(
+        # pipe stderr such that it gets displayed in just one line, updating as new things happen.
+        build_status = subprocess.run(
             ["cargo", "build", "--release", "-p", "runtime"],
             cwd=student_folder,
             stderr=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
-            check=True,
         )
+
+        # if build_status was not success, print and skip
+        if build_status.returncode != 0:
+            print(f"⚠️ {student_folder} failed to build, skipping to next folder.")
+            continue
 
         # copy the wasm file to the root of the folder.
         wasm_file_path = os.path.join(
@@ -121,13 +124,14 @@ def test_count(test):
 
 
 def maybe_filter(folder):
-    if folder.startswith("assignment-3-frame-less"):
+    if folder.startswith(prefix):
         if len(sys.argv) > 1:
             if sys.argv[1] not in folder:
                 print(f"🏹 {sys.argv[1]} not in {folder}, skipping to next folder.")
                 return False
         return True
     else:
+        print(f"🏹 {prefix} not in {folder}, skipping to next folder.")
         return False
 
 
@@ -151,20 +155,42 @@ nonce_fundamentals_test_count = test_count("nonce::fundamentals")
 nonce_challenging_test_count = test_count("nonce::challenging")
 nonce_optional_test_count = test_count("nonce::optional")
 
-basics_max_fundamentals_failures = 1
-basics_max_failure = 1  # out of 3
+basics_max_fundamentals_failures = 0
+basics_max_challenging_failure = 1
 
-currency_max_failure = 2  # out of 7
 currency_max_fundamentals_failures = 0
+currency_max_challenging_failure = 4
 
-staking_max_failure = 2  # out of 4
 staking_max_fundamentals_failures = 0
+staking_max_challenging_failure = 2
 
-tipping_max_failure = 2  # out of 11
 tipping_max_fundamentals_failures = 0
+tipping_max_challenging_failure = 4
 
-nonce_max_failure = 2  # irrelevant
 nonce_max_fundamentals_failures = 0
+nonce_max_challenging_failure = 2
+
+# for each category of tests, print the count, and the max allowed failures.
+print(
+    f"""
+basics::fundamentals: {basics_fundamentals_test_count}, max_failures: {basics_max_fundamentals_failures}
+basics::challenging: {basics_challenging_test_count}, max_failures: {basics_max_challenging_failure}
+basics::optional: {basics_optional_test_count},
+currency::fundamentals: {currency_fundamentals_test_count}, max_failures: {currency_max_fundamentals_failures}
+currency::challenging: {currency_challenging_test_count}, max_failures: {currency_max_challenging_failure}
+currency::optional: {currency_optional_test_count},
+staking::fundamentals: {staking_fundamentals_test_count}, max_failures: {staking_max_fundamentals_failures}
+staking::challenging: {staking_challenging_test_count}, max_failures: {staking_max_challenging_failure}
+staking::optional: {staking_optional_test_count},
+tipping::fundamentals: {tipping_fundamentals_test_count}, max_failures: {tipping_max_fundamentals_failures}
+tipping::challenging: {tipping_challenging_test_count}, max_failures: {tipping_max_challenging_failure}
+tipping::optional: {tipping_optional_test_count},
+nonce::fundamentals: {nonce_fundamentals_test_count}, max_failures: {nonce_max_fundamentals_failures}
+nonce::challenging: {nonce_challenging_test_count}, max_failures: {nonce_max_challenging_failure}
+nonce::optional: {nonce_optional_test_count},
+"""
+)
+
 
 failure_counter = Counter()
 
@@ -186,7 +212,8 @@ def grade_test_module(folder, test_prefix, max_failures):
     custom_env = os.environ.copy()
     custom_env["RUST_LOG"] = "grading=debug"
     custom_env["WASM_FILE"] = wasm_file_path
-    subprocess.run(
+
+    test_proc_code = subprocess.run(
         [
             "cargo",
             "nextest",
@@ -203,9 +230,9 @@ def grade_test_module(folder, test_prefix, max_failures):
         env=custom_env,
         cwd=".",
         stderr=stderr_file,
-        stdout=subprocess.DEVNULL,
-        check=True,
-    )
+        stdout=subprocess.PIPE,
+        check=False,
+    ).returncode
 
     # copy the xml file to root for better visibility:
     xml_file_path = os.path.join("target", "nextest", "default", "result.xml")
@@ -269,7 +296,7 @@ def grade_student(folder, writer):
     b1 = grade_test_module(
         folder, "basics::fundamentals", basics_max_fundamentals_failures
     )
-    b2 = grade_test_module(folder, "basics::challenging", basics_max_failure)
+    b2 = grade_test_module(folder, "basics::challenging", basics_max_challenging_failure)
     b3 = grade_test_module(folder, "basics::optional", 0)
     basics = b1["outcome"] and b2["outcome"]
     failure_counter.update(b1["failures"] + b2["failures"] + b3["failures"])
@@ -277,23 +304,15 @@ def grade_student(folder, writer):
     c1 = grade_test_module(
         folder, "currency::fundamentals", currency_max_fundamentals_failures
     )
-    c2 = grade_test_module(folder, "currency::challenging", currency_max_failure)
+    c2 = grade_test_module(folder, "currency::challenging", currency_max_challenging_failure)
     c3 = grade_test_module(folder, "currency::optional", 0)
     currency = c1["outcome"] and c2["outcome"]
     failure_counter.update(c1["failures"] + c2["failures"] + c3["failures"])
 
-    s1 = grade_test_module(
-        folder, "staking::fundamentals", staking_max_fundamentals_failures
-    )
-    s2 = grade_test_module(folder, "staking::challenging", staking_max_failure)
-    s3 = grade_test_module(folder, "staking::optional", 0)
-    staking = s1["outcome"] and s2["outcome"]
-    failure_counter.update(s1["failures"] + s2["failures"] + s3["failures"])
-
     t1 = grade_test_module(
         folder, "tipping::fundamentals", tipping_max_fundamentals_failures
     )
-    t2 = grade_test_module(folder, "tipping::challenging", tipping_max_failure)
+    t2 = grade_test_module(folder, "tipping::challenging", tipping_max_challenging_failure)
     t3 = grade_test_module(folder, "tipping::optional", 0)
     tipping = t1["outcome"] and t2["outcome"]
     failure_counter.update(t1["failures"] + t2["failures"] + t3["failures"])
@@ -301,17 +320,25 @@ def grade_student(folder, writer):
     n1 = grade_test_module(
         folder, "nonce::fundamentals", nonce_max_fundamentals_failures
     )
-    n2 = grade_test_module(folder, "nonce::challenging", nonce_max_failure)
+    n2 = grade_test_module(folder, "nonce::challenging", nonce_max_challenging_failure)
     n3 = grade_test_module(folder, "nonce::optional", 0)
     nonce = n1["outcome"] and n2["outcome"]
     failure_counter.update(n1["failures"] + n2["failures"] + n3["failures"])
 
-    currency_staking = currency and staking
-    tipping_nonce = tipping and nonce
+    s1 = grade_test_module(
+        folder, "staking::fundamentals", staking_max_fundamentals_failures
+    )
+    s2 = grade_test_module(folder, "staking::challenging", staking_max_challenging_failure)
+    s3 = grade_test_module(folder, "staking::optional", 0)
+    staking = s1["outcome"] and s2["outcome"]
+    failure_counter.update(s1["failures"] + s2["failures"] + s3["failures"])
 
-    auto_grade = int(basics) + int(currency_staking) + int(tipping_nonce)
+    tipping_or_nonce = tipping or nonce
+
+    auto_grade = int(basics) + int(currency) + int(tipping_or_nonce)
     end_time = time.time()
     elapsed_time = end_time - start_time
+
     # calculate the sum of successes from all items
     sum_successes = (
         len(b1["successes"])
@@ -375,6 +402,12 @@ def grade_student(folder, writer):
         ]
     )
 
+	# TODO: update this. Be very clear on the rubric. Quote what was already posted on discord.
+
+	# TODO: All hidden tests are spread into the challenging/optional. This should give students
+    # less excuse to fail any of the existing fundamental tests. Although, they could say that it
+    # was not said to them that failing 1 test might cause them to fail the whole section.
+
     final_grade_template = f"""## Prelude
 
 First, congratulations for completing this assignment. Please bare in mind that this assignment is
@@ -383,7 +416,7 @@ significantly more challenging, and open ended than the previous two. Be proud o
 ## Wasm File
 
 If you provided a `runtime.wasm` in the root of your main branch, we used that. Else, we ran `cargo
-run --release` and used the output. This has no effect on your score.
+run --release -p runtime` and used the output. This has no effect on your score.
 
 ## Grading Process
 
@@ -391,38 +424,30 @@ run --release` and used the output. This has no effect on your score.
 
 <summary>Click to see the detailed grading process.</summary>
 
-
 This grading report is generated based on the grading guidelines that you were given at the start of
 the assignment. Recall that our tests are broadly categorized into 3 groups:
 
-* _basics_
-* _currency + staking_
-* _tipping + nonce_
-
-The only difference is that the initial rubric made test groups exclusively _additive_, meaning that
-you could only achieve a point of 2, if you have successfully passed _both "basics" and
-"currency+staking"_ tests. For the sake of simplicity, and to everyone's benefit, this is no longer
-the case. Simply put:
-
 * if you pass all the _basic_ tests, you get 1 point.
-* if you pass all the _currency + staking_ tests, you get 1 point.
-* if you pass all the _tipping + nonce_ tests, you get 1 point.
+* if you pass all the _currency_ tests, you get 1 point.
+* if you pass all the _tipping *OR* nonce_ tests, you get 1 point.
 
 The above makes the process of deciding on [0-3] fully automated. Your instructors also provide a
-manual review of your code, and possibly alter your score.
+manual review of your code, and possibly alter your score if a distinction is to be made.
 
 In each testing group, there are 3 subgroups. In each subgroup, you are allowed a maximum number of
 test failures. The subgroups, and their respective maximum number of allowed failures are:
 
 * **fundamentals**: 0 -- you are allowed to have no failures in this subgroup.
 * **challenging**: [1-3] -- you are allowed to have a number of failures in this subgroup. These are
-	tests that are more challenging, and we expect you to get some of them wrong, but not all.
-* **optional**: +infinity -- you are allowed to have any number of failures here, and it will have no
-	impact on your auto-computed score. These are edge cases that we didn't expect you to get
-	correctly, because the assignment didn't clarify them.
+    tests that are more challenging, and we expect you to get some of them wrong, but not all.
+* **optional**: +infinity -- you are allowed to have any number of failures here, and it will have
+  no
+    impact on your auto-computed score. These are edge cases that we didn't expect you to get
+    correctly, because the assignment didn't clarify them.
 
-> In the end, we made the fundamentals subgroup of `basics` group allow for **1** test failure as
-well.
+Note that some of the tests were hidden in the pre-grading process. None of these tests ended up
+being in the "fundamentals" group, so you had 5 trials to make sure you get the fundamentals correct
+in each category.
 
 You can identify the _group_ and _subgroup_ of each tests by looking at the name of the test. For
 example:
@@ -431,53 +456,65 @@ example:
 
 Is a test in the tipping group, and _fundamentals_ subgroup.
 
-The number of tests, and max failures for each subgroup are as follows:
+To summarize, the number of tests, and max failures for each subgroup are as follows:
 
 * basics:
-		* {basics_fundamentals_test_count} fundamental tests, {basics_max_fundamentals_failures} max failures.
-		* {basics_challenging_test_count} challenging tests, {basics_max_failure} max failures
-		* {nonce_optional_test_count} optional tests
+        * {basics_fundamentals_test_count} fundamental tests, {basics_max_fundamentals_failures} max
+          failures.
+        * {basics_challenging_test_count} challenging tests, {basics_max_challenging_failure} max
+          failures
+        * {nonce_optional_test_count} optional tests
 * currency:
-		* {currency_fundamentals_test_count} fundamental tests, {currency_max_fundamentals_failures} max failures.
-		* {currency_challenging_test_count} challenging tests, {currency_max_failure} max failures
-		* {currency_optional_test_count} optional tests
-* staking:
-		* {staking_fundamentals_test_count} fundamental tests, {staking_max_fundamentals_failures} max failures.
-		* {staking_challenging_test_count} challenging tests, {staking_max_failure} max failures
-		* {staking_optional_test_count} optional tests
+        * {currency_fundamentals_test_count} fundamental tests, {currency_max_fundamentals_failures}
+          max failures.
+        * {currency_challenging_test_count} challenging tests, {currency_max_challenging_failure}
+          max failures
+        * {currency_optional_test_count} optional tests
 * tipping:
-		* {tipping_fundamentals_test_count} fundamental tests, {tipping_max_fundamentals_failures} max failures.
-		* {tipping_challenging_test_count} challenging tests, {tipping_max_failure} max failures
-		* {tipping_optional_test_count} optional tests
+        * {tipping_fundamentals_test_count} fundamental tests, {tipping_max_fundamentals_failures}
+          max failures.
+        * {tipping_challenging_test_count} challenging tests, {tipping_max_challenging_failure} max
+          failures
+        * {tipping_optional_test_count} optional tests
 * nonce:
-		* {nonce_fundamentals_test_count} fundamental tests, {nonce_max_fundamentals_failures} max failures.
-		* {nonce_challenging_test_count} challenging tests, {nonce_max_failure} max failures
-		* {nonce_optional_test_count} optional tests
+        * {nonce_fundamentals_test_count} fundamental tests, {nonce_max_fundamentals_failures} max
+          failures.
+        * {nonce_challenging_test_count} challenging tests, {nonce_max_challenging_failure} max
+          failures
+        * {nonce_optional_test_count} optional tests
+* staking:
+        * {staking_fundamentals_test_count} fundamental tests, {staking_max_fundamentals_failures}
+          max failures.
+        * {staking_challenging_test_count} challenging tests, {staking_max_challenging_failure} max
+          failures
+        * {staking_optional_test_count} optional tests
+
+As seen, all staking tests are marked as optional and have no impact on your score.
 
 </details>
 
 ## Auto-Graded Score
 
 * basics
-		* {b1['summary']}
-		* {b2['summary']}
-		* {b3['summary']}
+        * {b1['summary']}
+        * {b2['summary']}
+        * {b3['summary']}
 * currency
-		* {c1['summary']}
-		* {c2['summary']}
-		* {c3['summary']}
-* staking
-		* {s1['summary']}
-		* {s2['summary']}
-		* {s3['summary']}
+        * {c1['summary']}
+        * {c2['summary']}
+        * {c3['summary']}
 * tipping
-		* {t1['summary']}
-		* {t2['summary']}
-		* {t3['summary']}
+        * {t1['summary']}
+        * {t2['summary']}
+        * {t3['summary']}
 * nonce
-		* {n1['summary']}
-		* {n2['summary']}
-		* {n3['summary']}
+        * {n1['summary']}
+        * {n2['summary']}
+        * {n3['summary']}
+* staking
+        * {s1['summary']}
+        * {s2['summary']}
+        * {s3['summary']}
 
 {final_summary}
 
@@ -509,19 +546,19 @@ def calculate_final_grades():
         "sum-success",
         "sum-failures",
         f"basics::fundamentals ({basics_fundamentals_test_count})",
-        f"basics::challenging ({basics_challenging_test_count}, max_failures: {basics_max_failure})",
+        f"basics::challenging ({basics_challenging_test_count}, max_failures: {basics_max_challenging_failure})",
         f"basics::optional ({basics_optional_test_count})",
         f"currency::fundamentals ({currency_fundamentals_test_count})",
-        f"currency::challenging ({currency_challenging_test_count}, max_failures: {currency_max_failure})",
+        f"currency::challenging ({currency_challenging_test_count}, max_failures: {currency_max_challenging_failure})",
         f"currency::optional ({currency_optional_test_count})",
         f"staking::fundamentals ({staking_fundamentals_test_count})",
-        f"staking::challenging ({staking_challenging_test_count}, max_failures: {staking_max_failure})",
+        f"staking::challenging ({staking_challenging_test_count}, max_failures: {staking_max_challenging_failure})",
         f"staking::optional ({staking_optional_test_count})",
         f"tipping::fundamentals ({tipping_fundamentals_test_count})",
-        f"tipping::challenging ({tipping_challenging_test_count}, max_failures: {tipping_max_failure})",
+        f"tipping::challenging ({tipping_challenging_test_count}, max_failures: {tipping_max_challenging_failure})",
         f"tipping::optional ({tipping_optional_test_count})",
         f"nonce::fundamentals ({nonce_fundamentals_test_count})",
-        f"nonce::challenging ({nonce_challenging_test_count}, max_failures: {nonce_max_failure})",
+        f"nonce::challenging ({nonce_challenging_test_count}, max_failures: {nonce_max_challenging_failure})",
         f"nonce::optional ({nonce_optional_test_count})",
     ]
 
@@ -635,5 +672,6 @@ if __name__ == "__main__":
     # build_wasms()
     clear_all_artifacts()
     calculate_final_grades()
-    # analyze_csv_output()
+    analyze_csv_output()
     # push_grades(False)
+    print("Done!")

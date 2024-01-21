@@ -1,5 +1,5 @@
 RUST_BACKTRACE=1\
-RUST_LOG=grading=debug,frameless=debug \
+RUSTLOG=grading=debug,frameless=debug \
 WASM_FILE=$1 \
 cargo \
   nextest \
