@@ -671,7 +671,7 @@ def clear_all_artifacts():
 if __name__ == "__main__":
     # build_wasms()
     clear_all_artifacts()
-    calculate_final_grades()
-    analyze_csv_output()
+    # calculate_final_grades()
+    # analyze_csv_output()
     # push_grades(False)
     print("Done!")

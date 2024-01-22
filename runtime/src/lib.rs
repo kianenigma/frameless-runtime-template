@@ -360,11 +360,16 @@
 //!
 //! This is entirely optional.
 
+// The following 3 lines are related to your WASM build. Don't change.
 #![cfg_attr(not(feature = "std"), no_std)]
-
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+// imports the `substrate`'s WASM-compatible standard library. This should give you all standard
+// items like `vec!`. Do NOT bring in `std` from Rust, as this will not work in WASM.
+use sp_std::prelude::*;
+
+// The log target we will use this crate.
 const LOG_TARGET: &'static str = "frameless";
 
 pub mod shared;
@@ -384,7 +389,6 @@ use sp_runtime::{
 	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
 	ApplyExtrinsicResult, DispatchError,
 };
-use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
@@ -904,13 +908,18 @@ mod tests {
 
 	#[test]
 	fn does_it_print() {
-		// runt this with `cargo test does_it_print -- --nocapture`
+		// runt this with `cargo test does_it_print -- --nocapture`. Or if the test fails it will
+		// also print.
+		//
+		// Note that WASM cannot print using `println!`! This can only be used in `cargo
+		// test`, or wrapped in `sp_std::if_std! {}`, and then in native execution it will be seen.
+		// In general, don't use this in your code. Use a proper logger, as described below.
 		println!("Something");
 	}
 
 	#[test]
 	fn does_it_log() {
-		// run this with RUST_LOG=frameless=trace cargo test -p runtime does_it_log
+		// run this with `RUST_LOG=frameless=trace cargo test -p runtime does_it_log``
 		sp_tracing::try_init_simple();
 		log::info!(target: LOG_TARGET, "Something");
 	}

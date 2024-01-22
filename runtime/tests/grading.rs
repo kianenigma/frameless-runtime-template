@@ -1485,7 +1485,7 @@ mod tipping {
 			let mut state = state_with_bob();
 
 			let to_validate =
-				tipped(RuntimeCall::System(SystemCall::Set { value: 42 }), &Bob, 1, 95);
+				tipped(RuntimeCall::System(SystemCall::Set { value: 42 }), &Bob, 0, 95);
 			let validity = validate(to_validate, &mut state);
 			assert_eq!(
 				validity,
@@ -1740,7 +1740,7 @@ mod tipping {
 			let mut state = state_with_bob();
 
 			let to_validate =
-				tipped(RuntimeCall::System(SystemCall::Set { value: 42 }), &Bob, 1, 0);
+				tipped(RuntimeCall::System(SystemCall::Set { value: 42 }), &Bob, 0, 0);
 			let validity = validate(to_validate, &mut state);
 			assert!(matches!(validity, Ok(ValidTransaction { priority: 0, .. })));
 		}
@@ -1751,7 +1751,7 @@ mod tipping {
 			let mut state = state_with_bob();
 
 			let to_validate =
-				tipped(RuntimeCall::System(SystemCall::Set { value: 42 }), &Bob, 1, 100);
+				tipped(RuntimeCall::System(SystemCall::Set { value: 42 }), &Bob, 0, 100);
 			let validity = validate(to_validate, &mut state);
 			assert_eq!(
 				validity,
