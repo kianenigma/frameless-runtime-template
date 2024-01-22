@@ -13,6 +13,7 @@ import time
 import hashlib
 
 base_directory = "/Users/kianenigma/Desktop/Parity/pba4/hk-2024-assignment-3-frameless-submissions"
+# base_directory = "/Users/akon/github/pba-private/hk-2024-assignment-3-frameless-submissions"
 prefix = "hk-2024-assignment-3-frameless"
 
 
@@ -156,7 +157,7 @@ nonce_challenging_test_count = test_count("nonce::challenging")
 nonce_optional_test_count = test_count("nonce::optional")
 
 basics_max_fundamentals_failures = 0
-basics_max_challenging_failure = 1
+basics_max_challenging_failure = 2
 
 currency_max_fundamentals_failures = 0
 currency_max_challenging_failure = 4
@@ -410,7 +411,7 @@ def grade_student(folder, writer):
 
     final_grade_template = f"""## Prelude
 
-First, congratulations for completing this assignment. Please bare in mind that this assignment is
+First, congratulations on completing this assignment. Please bear in mind that this assignment was
 significantly more challenging, and open ended than the previous two. Be proud of your learning.
 
 ## Wasm File
@@ -427,9 +428,9 @@ run --release -p runtime` and used the output. This has no effect on your score.
 This grading report is generated based on the grading guidelines that you were given at the start of
 the assignment. Recall that our tests are broadly categorized into 3 groups:
 
-* if you pass all the _basic_ tests, you get 1 point.
+* if you pass all the _basics_ tests, you get 1 point.
 * if you pass all the _currency_ tests, you get 1 point.
-* if you pass all the _tipping *OR* nonce_ tests, you get 1 point.
+* if you pass either all the _tipping *OR* nonce_ tests, you get 1 point.
 
 The above makes the process of deciding on [0-3] fully automated. Your instructors also provide a
 manual review of your code, and possibly alter your score if a distinction is to be made.
@@ -446,8 +447,8 @@ test failures. The subgroups, and their respective maximum number of allowed fai
     correctly, because the assignment didn't clarify them.
 
 Note that some of the tests were hidden in the pre-grading process. None of these tests ended up
-being in the "fundamentals" group, so you had 5 trials to make sure you get the fundamentals correct
-in each category.
+being in the "fundamentals" group, so you had at least 5 trials (pregrades) to make sure you get the
+fundamentals correct in each category.
 
 You can identify the _group_ and _subgroup_ of each tests by looking at the name of the test. For
 example:
