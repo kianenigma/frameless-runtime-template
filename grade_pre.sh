@@ -9,4 +9,4 @@ RUST_BACKTRACE=1 RUST_LOG=grading=debug,frameless=debug WASM_FILE=$1 cargo \
   --no-fail-fast
 
 cp ./target/nextest/default/result.xml ./result.xml
-cat result.xml | jtm  > result.json
+cat result.xml > result.json
