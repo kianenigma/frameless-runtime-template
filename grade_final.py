@@ -12,8 +12,8 @@ from datetime import datetime
 import time
 import hashlib
 
-base_directory = "/Users/kianenigma/Desktop/Parity/pba4/hk-2024-assignment-3-frameless-submissions"
-# base_directory = "/Users/akon/github/pba-private/hk-2024-assignment-3-frameless-submissions"
+# base_directory = "/Users/kianenigma/Desktop/Parity/pba4/hk-2024-assignment-3-frameless-submissions"
+base_directory = "/Users/akon/github/pba-private/hk-2024-assignment-3-frameless-submissions"
 prefix = "hk-2024-assignment-3-frameless"
 
 
@@ -173,6 +173,8 @@ tipping_max_challenging_failure = 4
 nonce_max_fundamentals_failures = 0
 nonce_max_challenging_failure = 2
 
+distinction_max_failures = 5
+
 # for each category of tests, print the count, and the max allowed failures.
 print(
     f"""
@@ -193,7 +195,6 @@ nonce::challenging: {nonce_challenging_test_count}, max_failures: {nonce_max_cha
 nonce::optional: {nonce_optional_test_count},
 """
 )
-
 
 failure_counter = Counter()
 
@@ -273,7 +274,7 @@ def grade_test_module(folder, test_prefix, max_failures):
     failures_len = len(failures)
     successes_len = len(successes)
     if failures_len > max_failures:
-        emoji = "👎" if "optional" in test_prefix else "❌"
+        emoji = "🤷" if "optional" in test_prefix else "❌"
         summary = f"{emoji} failed {test_prefix} with {successes_len}/{test_cases_len} successes."
         print(f"  {summary}")
         return {
@@ -347,39 +348,45 @@ def grade_student(folder, writer):
 
     # calculate the sum of successes from all items
     sum_successes = (
-        len(b1["successes"])
-        + len(b2["successes"])
-        + len(b3["successes"])
-        + len(c1["successes"])
-        + len(c2["successes"])
-        + len(c3["successes"])
-        + len(s1["successes"])
-        + len(s2["successes"])
-        + len(s3["successes"])
-        + len(t1["successes"])
-        + len(t2["successes"])
-        + len(t3["successes"])
-        + len(n1["successes"])
-        + len(n2["successes"])
-        + len(n3["successes"])
+            len(b1["successes"])
+            + len(b2["successes"])
+            + len(b3["successes"])
+            + len(c1["successes"])
+            + len(c2["successes"])
+            + len(c3["successes"])
+            + len(s1["successes"])
+            + len(s2["successes"])
+            + len(s3["successes"])
+            + len(t1["successes"])
+            + len(t2["successes"])
+            + len(t3["successes"])
+            + len(n1["successes"])
+            + len(n2["successes"])
+            + len(n3["successes"])
     )
     sum_failures = (
-        len(b1["failures"])
-        + len(b2["failures"])
-        + len(b3["failures"])
-        + len(c1["failures"])
-        + len(c2["failures"])
-        + len(c3["failures"])
-        + len(s1["failures"])
-        + len(s2["failures"])
-        + len(s3["failures"])
-        + len(t1["failures"])
-        + len(t2["failures"])
-        + len(t3["failures"])
-        + len(n1["failures"])
-        + len(n2["failures"])
-        + len(n3["failures"])
+            len(b1["failures"])
+            + len(b2["failures"])
+            + len(b3["failures"])
+            + len(c1["failures"])
+            + len(c2["failures"])
+            + len(c3["failures"])
+            + len(s1["failures"])
+            + len(s2["failures"])
+            + len(s3["failures"])
+            + len(t1["failures"])
+            + len(t2["failures"])
+            + len(t3["failures"])
+            + len(n1["failures"])
+            + len(n2["failures"])
+            + len(n3["failures"])
     )
+
+    distinction = "😞 No distinction." if sum_failures > distinction_max_failures else "🔥 Received distinction."
+    if sum_failures <= distinction_max_failures:
+        auto_grade += 1
+
+    print(f"  {distinction}")
 
     final_summary = f"sum-success: {sum_successes} / sum-failure: {sum_failures} / auto-graded-score: {auto_grade}, grading time: {elapsed_time:.2f}s"
     print(f"\033[1m {final_summary} \033[0m")
@@ -408,9 +415,9 @@ def grade_student(folder, writer):
         ]
     )
 
-	# TODO: update this. Be very clear on the rubric. Quote what was already posted on discord.
+    # TODO: update this. Be very clear on the rubric. Quote what was already posted on discord.
 
-	# TODO: All hidden tests are spread into the challenging/optional. This should give students
+    # TODO: All hidden tests are spread into the challenging/optional. This should give students
     # less excuse to fail any of the existing fundamental tests. Although, they could say that it
     # was not said to them that failing 1 test might cause them to fail the whole section.
 
@@ -437,23 +444,28 @@ the assignment. Recall that our tests are broadly categorized into 3 groups:
 * if you pass all the _currency_ tests, you get 1 point.
 * if you pass either all the _tipping *OR* nonce_ tests, you get 1 point.
 
-The above makes the process of deciding on [0-3] fully automated. Your instructors also provide a
-manual review of your code, and possibly alter your score if a distinction is to be made.
+Your instructors will also provide a manual review of your code, but this does not impact your 
+score.
 
 In each testing group, there are 3 subgroups. In each subgroup, you are allowed a maximum number of
 test failures. The subgroups, and their respective maximum number of allowed failures are:
 
-* **fundamentals**: 0 -- you are allowed to have no failures in this subgroup.
-* **challenging**: [1-3] -- you are allowed to have a number of failures in this subgroup. These are
+* **fundamentals**: you are allowed to have no failures in this subgroup.
+* **challenging**: you are allowed to have a number of failures in this subgroup. These are
     tests that are more challenging, and we expect you to get some of them wrong, but not all.
-* **optional**: +infinity -- you are allowed to have any number of failures here, and it will have
-  no
-    impact on your auto-computed score. These are edge cases that we didn't expect you to get
+* **optional**: you are allowed to have any number of failures here, and it will have
+    no impact on your auto-computed score. These are edge cases that we didn't expect you to get
     correctly, because the assignment didn't clarify them.
 
 Note that some of the tests were hidden in the pre-grading process. None of these tests ended up
 being in the "fundamentals" group, so you had at least 5 trials (pregrades) to make sure you get the
 fundamentals correct in each category.
+
+### Distinction
+
+Additionally, we impose the following requirements for receiving a distinction:
+* You received 3 points from above requirements, and
+* You only fail upto maximum of {distinction_max_failures} tests.
 
 You can identify the _group_ and _subgroup_ of each tests by looking at the name of the test. For
 example:
@@ -465,35 +477,27 @@ Is a test in the tipping group, and _fundamentals_ subgroup.
 To summarize, the number of tests, and max failures for each subgroup are as follows:
 
 * basics:
-        * {basics_fundamentals_test_count} fundamental tests, {basics_max_fundamentals_failures} max
-          failures.
-        * {basics_challenging_test_count} challenging tests, {basics_max_challenging_failure} max
-          failures
-        * {nonce_optional_test_count} optional tests
+        * {basics_fundamentals_test_count} fundamental tests, {basics_max_fundamentals_failures} max failures.
+        * {basics_challenging_test_count} challenging tests, {basics_max_challenging_failure} max failures.
+        * {nonce_optional_test_count} optional tests.
 * currency:
-        * {currency_fundamentals_test_count} fundamental tests, {currency_max_fundamentals_failures}
-          max failures.
-        * {currency_challenging_test_count} challenging tests, {currency_max_challenging_failure}
-          max failures
-        * {currency_optional_test_count} optional tests
+        * {currency_fundamentals_test_count} fundamental tests, {currency_max_fundamentals_failures} max failures.
+        * {currency_challenging_test_count} challenging tests, {currency_max_challenging_failure} max failures.
+        * {currency_optional_test_count} optional tests.
 * tipping:
-        * {tipping_fundamentals_test_count} fundamental tests, {tipping_max_fundamentals_failures}
-          max failures.
-        * {tipping_challenging_test_count} challenging tests, {tipping_max_challenging_failure} max
-          failures
-        * {tipping_optional_test_count} optional tests
+        * {tipping_fundamentals_test_count} fundamental tests, {tipping_max_fundamentals_failures} max failures.
+        * {tipping_challenging_test_count} challenging tests, {tipping_max_challenging_failure} max failures.
+        * {tipping_optional_test_count} optional tests.
 * nonce:
-        * {nonce_fundamentals_test_count} fundamental tests, {nonce_max_fundamentals_failures} max
-          failures.
-        * {nonce_challenging_test_count} challenging tests, {nonce_max_challenging_failure} max
-          failures
-        * {nonce_optional_test_count} optional tests
+        * {nonce_fundamentals_test_count} fundamental tests, {nonce_max_fundamentals_failures} max failures.
+        * {nonce_challenging_test_count} challenging tests, {nonce_max_challenging_failure} max failures.
+        * {nonce_optional_test_count} optional tests.
 * staking:
-        * {staking_fundamentals_test_count} fundamental tests, {staking_max_fundamentals_failures}
-          max failures.
-        * {staking_challenging_test_count} challenging tests, {staking_max_challenging_failure} max
-          failures
-        * {staking_optional_test_count} optional tests
+        * {staking_fundamentals_test_count} fundamental tests, {staking_max_fundamentals_failures} max failures.
+        * {staking_challenging_test_count} challenging tests, {staking_max_challenging_failure} max failures.
+        * {staking_optional_test_count} optional tests.
+* distinction:
+        * Less than or equal to {distinction_max_failures} failures overall.        
 
 As seen, all staking tests are marked as optional and have no impact on your score.
 
@@ -521,6 +525,8 @@ As seen, all staking tests are marked as optional and have no impact on your sco
         * {s1['summary']}
         * {s2['summary']}
         * {s3['summary']}
+* distinction
+        * {distinction}         
 
 {final_summary}
 
@@ -531,8 +537,6 @@ Other than this report, you also receive the `xml` and `stderr` file if your ent
 
 Please see the feedback PR in your repo for potential further comments. Your instructors will leave
 a series of comments there, in the style of a pull request review.
-
-If any alterations are to be made to your score, your instructors will add a comment to this PR.
 
 ## Score
 
@@ -617,7 +621,7 @@ def push_grades(actually_push):
 
         # checkout to a branch called `grade`
         subprocess.run(
-            ["git", "checkout", "-b", "grade"],
+            ["git", "checkout", "-B", "grade"],
             cwd=student_folder,
             check=True,
         )
