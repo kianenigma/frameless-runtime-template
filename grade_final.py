@@ -102,6 +102,8 @@ def test_count(test):
             "list",
             "-p",
             "runtime",
+            "--features",
+            "final-grade",
             "-E",
             f"test({test})",
             "-T",
@@ -222,11 +224,14 @@ def grade_test_module(folder, test_prefix, max_failures):
             "--release",
             "-p",
             "runtime",
+            "--features",
+            "final-grade",
             "-E" f"test({test_prefix})",
             "--failure-output",
             "final",
             "--success-output",
             "never",
+            "--no-fail-fast",
         ],
         env=custom_env,
         cwd=".",
@@ -672,7 +677,7 @@ def clear_all_artifacts():
 if __name__ == "__main__":
     # build_wasms()
     clear_all_artifacts()
-    # calculate_final_grades()
-    # analyze_csv_output()
+    calculate_final_grades()
+    analyze_csv_output()
     # push_grades(False)
     print("Done!")

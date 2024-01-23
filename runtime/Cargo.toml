@@ -67,3 +67,4 @@ std = [
 ]
 # This is only used in grading -- students should ignore.
 pre-grade = []
+final-grade = []

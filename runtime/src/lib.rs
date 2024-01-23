@@ -763,7 +763,7 @@ impl_runtime_apis! {
 	}
 }
 #[cfg(test)]
-#[cfg(not(feature = "pre-grade"))]
+#[cfg(all(not(feature = "pre-grade"), not(feature = "final-grade")))]
 mod tests {
 	use super::*;
 	use crate::shared::{AccountId, Balance, RuntimeCallExt};

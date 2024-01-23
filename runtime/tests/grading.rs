@@ -341,6 +341,9 @@ pub(crate) fn fund_account(who: AccountId) {
 	}
 }
 
+#[cfg(all(not(feature = "pre-grade"), not(feature = "final-grade")))]
+compile_error! {"pre-grading or final-grading feature must be enabled"}
+
 mod basics {
 	use super::*;
 
@@ -1476,7 +1479,11 @@ mod tipping {
 				u64::MAX as u128 + 1,
 			);
 			let validity = validate(to_validate, &mut state);
-			assert!(matches!(validity, Ok(ValidTransaction { priority: u64::MAX, .. })));
+			assert!(
+                matches!(validity, Ok(ValidTransaction { priority: u64::MAX, .. }),),
+                "expected Ok(ValidTransaction priority: u64::MAX, .. ), got {:?}",
+                validity
+            );
 		}
 
 		#[test]
