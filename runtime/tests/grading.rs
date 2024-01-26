@@ -1475,7 +1475,7 @@ mod tipping {
 			let to_validate = tipped(
 				RuntimeCall::System(SystemCall::Set { value: 42 }),
 				&Bob,
-				1,
+				0,
 				u64::MAX as u128 + 1,
 			);
 			let validity = validate(to_validate, &mut state);
