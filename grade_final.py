@@ -617,6 +617,7 @@ def push_grades(actually_push):
             continue
 
         student_folder = os.path.join(base_directory, folder)
+        print(f"👷 pushing grades for {student_folder}.")
 
         # checkout to a branch called `grade`
         subprocess.run(
@@ -679,8 +680,8 @@ def clear_all_artifacts():
 
 if __name__ == "__main__":
     # build_wasms()
-    clear_all_artifacts()
-    calculate_final_grades()
-    analyze_csv_output()
-    # push_grades(False)
+    # clear_all_artifacts()
+    # calculate_final_grades()
+    # analyze_csv_output()
+    push_grades(True)
     print("Done!")
