@@ -16,7 +16,6 @@ import hashlib
 base_directory = "/Users/akon/github/pba-private/hk-2024-assignment-3-frameless-submissions"
 prefix = "hk-2024-assignment-3-frameless"
 
-
 def build_wasms():
     wasm_hash_set = set()
     for folder in os.listdir(base_directory):
