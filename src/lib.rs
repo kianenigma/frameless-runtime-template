@@ -1,9 +1,45 @@
-//! Assignment DOC TODO:
+//! # FRAMELess Runtime
+//!
+//! Welcome to the FRAMELess assignment.
+//!
+//! > This assignment is based on Joshy's experiment years ago to explore building a Substrate
+//! > runtime using pure Rust. If you learn something new in this exercise, attribute it to his
+//! > work.
+//!
+//! The code in the rust crate is a basic Substrate-but-not-FRAME-based-runtime. It uses only crates
+//! from the substrate primitives, and the final outcome of it is a fully functioning
+//! Substrate-based runtime. How cool is that?
+//!
+//! This assignment is not graded, and therefore does not have one strict set of requirements. We
+//! provide you with a list of suggestions, and you do as you prefer. Try and maximize your learning
+//! while working with this template. From experience, we know that one of the unique things
+//! students learn is PBA is "how things work under the hood", and this template is indeed one of
+//! those.
+//!
+//! ## Suggestions
+//!
+//! * Understand the code. This will be done in a walkthrough in the class.
+//! * Run tests and understand what each one is testing.
+//!
+//! > In these two steps, you should pay close attention to why/how the state root is being kept
+//! > correctly. Moreover, you will know which runtime-apis are used at which steps.
+//!
+//!
+//! * Run this runtime. For this assignment, we only use a custom node that is independent of your
+//!   runtime. We call such nodes an `omni-node`.
+//! * Work with RPCs and your runtime. Read existing state (`:code`). Submit a simple
+//!   `Call::SetValue`.
+//! * Work with `chain-spec-builder` to create a chain spec for your runtime, use an existing
+//!   preset, or generate default + patch.
+//!
+//! Finally, feel free then to extend the runtime with more application logic. You have two general
+//! ways:
+//!
+//! 1. Add a mapping of account-ids and balances, and implement a simple transfer function.
+//! 2. Add proper signature verification to the extrinsics.
 
 // The following 3 lines are related to your WASM build. Don't change.
 #![cfg_attr(not(feature = "std"), no_std)]
-#[cfg(feature = "std")]
-include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use scale_info::TypeInfo;
 // imports the `substrate`'s WASM-compatible standard library. This should give you all standard
