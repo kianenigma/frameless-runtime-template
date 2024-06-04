@@ -1,0 +1,12 @@
+flowchart LR
+    GenesisConfig --build_state()--> Runtime  --> Final[Runtime Builds Final State 👷‍♂️]
+    ChainSpecBuilder
+    ChainSpecBuilder <--get_preset(), preset_names()--> OtherRuntime[Runtime]
+
+    subgraph ChainSpec
+        direction LR
+        BootNodes
+        TokenDecimals
+        GenesisConfig
+    end
+
