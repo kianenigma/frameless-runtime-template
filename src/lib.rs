@@ -171,12 +171,6 @@
 //! * `chain_getBlockHash`
 //! * `chain_getBlock`
 
-// TODO: have curl or wscat installed
-// TODO: Substrate folder structure
-// TODO: where to find the wasm file
-// TODO: disclaimer on copilot
-// TODO: install chain-spec-builder, pba-omni-node, and this assignment repo.
-
 // because we run the docs with `--document-private-items`
 #![allow(rustdoc::private_intra_doc_links)]
 // The following 3 lines are related to your WASM build. Don't change.
