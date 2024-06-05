@@ -68,13 +68,19 @@
 //! now:
 //!
 //! ```text
-//! wscat -c 127.0.0.1:9944 -x '{"jsonrpc":"2.0", "id":1, "method":"state_getStorage", "params": ["76616c7565"] }'
+//! wscat -c 127.0.0.1:9944 -x '{"jsonrpc":"2.0", "id":1, "method":"state_getStorage", "params": ["76616c7565"] }`
+//! ```
+//!
+//! Or equivalently:
+//!
+//! ```curl
+//! curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"state_getStorage", "params": ["76616c7565"] }' http://127.0.0.1:9944
 //! ```
 //!
 //! Can you guess what is this?
 //!
 //! ```text
-//! wscat -c 127.0.0.1:9944 -x '{"jsonrpc":"2.0", "id":1, "method":"state_getStorage", "params": ["3a636f6465"] }'
+//! wscat -c 127.0.0.1:9944 -x '{"jsonrpc":"2.0", "id":1, "method":"state_getStorage", "params": ["3a636f6465"] }
 //! ```
 //!
 //! If you want to try submitting a transaction, you can use the following:
